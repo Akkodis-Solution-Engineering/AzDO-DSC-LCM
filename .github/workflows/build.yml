@@ -1,0 +1,35 @@
+name: Perform Development Build
+
+on:
+  push:
+    branches:
+      - Development
+  pull_request:
+    branches:
+      - main
+
+
+jobs:
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+
+      - name: Step 1 - Download PowerShell Dependencies
+        shell: pwsh
+        run: Install-Module aDtum, Datum.InvokeCommand, powershell-yaml, PSDesiredStateConfiguration -Force
+
+      - name: Step 2 - Attempt to Build the Project
+        shell: pwsh
+        run: .\Build.ps1 -ResolveDependency -Tasks build -CodeCoverageThreshold 70 -PesterScript .\tests.ps1
+
+      - name: Step 3 - Package the Project
+        shell: pwsh
+        run: .\Build.ps1 -Tasks pack
+
+      - name: Step 4 - Upload the Artifact into Github
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ github.run_id }}
+          path: .\Output\azdo-dsc-lcm\
+        

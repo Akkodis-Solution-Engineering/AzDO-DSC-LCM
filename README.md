@@ -2,8 +2,6 @@
 
 [![Current Code Coverage Status](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/CodeCoverage.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/CodeCoverage.yml)
 
-
-
 ## Overview
 
 `AzDO-DSC-LCM` is the Local Configuration Manager (LCM) component for the `AzureDevOpsDsc` DSC Module. This module helps manage Azure DevOps resources through Desired State Configuration (DSC). Utilizes Datum to merge configuration stubs into larger pieces of configuration which is parsed into the LCM.

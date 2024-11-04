@@ -39,8 +39,7 @@ Ensure that the environment variable AZDODSC_CACHE_DIRECTORY is set before runni
 
 #>
 
-
-function Invoke-AZDoLCM {
+function Invoke-AzDoLCM {
     # Utilizes the CmdletBinding attribute to enable advanced function features similar to cmdlets.
     [CmdletBinding(defaultParameterSetName='Default')]
     param(
@@ -190,7 +189,7 @@ function Invoke-AZDoLCM {
     postExecutionTask:
 
     - name: Org Group Members
-        type: AzureDevOpsDsc/xAzDoProject
+        type: AzureDevOpsDsc/AzDoProject
         properties:
         projectName: CON_$ProjectName
         projectDescription: $ProjectDescription

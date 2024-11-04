@@ -4,20 +4,17 @@ on:
   push:
     branches:
       - Development
-  pull_request:
-    branches:
-      - main
-
 
 jobs:
 
+  build:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
 
       - name: Step 1 - Download PowerShell Dependencies
         shell: pwsh
-        run: Install-Module aDtum, Datum.InvokeCommand, powershell-yaml, PSDesiredStateConfiguration -Force
+        run: Install-Module Datum, Datum.InvokeCommand, powershell-yaml, PSDesiredStateConfiguration -Force
 
       - name: Step 2 - Attempt to Build the Project
         shell: pwsh
@@ -27,9 +24,31 @@ jobs:
         shell: pwsh
         run: .\Build.ps1 -Tasks pack
 
-      - name: Step 4 - Upload the Artifact into Github
-        uses: actions/upload-artifact@v2
+      - name: Step 4 - Set Version Number
+        shell: bash
+        run: echo "BUILD_VERSION=$(cat .\output\version.txt)" >> $GITHUB_ENV
+
+      - name: Step 4 - Upload Artifact
+        uses: actions/upload-artifact@v3
         with:
           name: ${{ github.run_id }}
-          path: .\Output\azdo-dsc-lcm\
-        
+          path: ./output/azdo-dsc-lcm/
+
+  release:
+    runs-on: windows-latest
+    needs: build
+    steps:
+
+      - name: Step 1 - Download Artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: ${{ github.run_id }}
+
+      - name: Step 2 - Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          release_name: ${{ github.repository }} - ${{ env:BUILD_VERSION }}-${{ github.run_number }}
+          tag_name: ${{ env:BUILD_VERSION }}-${{ github.run_number }}
+

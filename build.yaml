@@ -27,6 +27,7 @@ BuildWorkflow:
 
   build:
     - Clean
+    - Increment_Version
     - Build_Module_ModuleBuilder
     - Copy_LCM_Rules
 

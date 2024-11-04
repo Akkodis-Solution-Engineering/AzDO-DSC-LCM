@@ -1,6 +1,7 @@
 name: Perform Development Build
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - Development

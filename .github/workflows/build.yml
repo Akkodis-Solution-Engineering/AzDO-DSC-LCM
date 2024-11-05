@@ -9,6 +9,9 @@ on:
 jobs:
 
   build:
+    runs-on: windows-latest
+    outputs:
+      build-version: ${{ steps.set-version.outputs.BUILD_VERSION }}
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
@@ -26,8 +29,9 @@ jobs:
         run: .\Build.ps1 -Tasks pack
 
       - name: Step 4 - Set Version Number
+        id: set-version
         shell: bash
-        run: echo "BUILD_VERSION=$(cat .\output\version.txt)" >> $GITHUB_ENV
+        run: echo "BUILD_VERSION=$(cat ./output/version.txt)" >> $GITHUB_OUTPUT
 
       - name: Step 4 - Upload Artifact
         uses: actions/upload-artifact@v3
@@ -36,9 +40,18 @@ jobs:
           path: ./output/azdo-dsc-lcm/
 
   release:
-    runs-on: windows-latest
-    needs: build
+    needs: build  
+    runs-on: ubuntu-latest
     steps:
+
+      - env:
+          BUILD_VERSION: ${{ needs.build.outputs.build-version }}
+        name: Set Version
+        run: echo "BUILD_VERSION=${BUILD_VERSION}" >> $GITHUB_ENV
+
+      - name: Step 0 - Print Version
+        shell: pwsh
+        run: write-host $("${{ env.BUILD_VERSION }}-${{ github.run_number }}")
 
       - name: Step 1 - Download Artifact
         uses: actions/download-artifact@v3
@@ -50,6 +63,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          release_name: ${{ github.repository }} - ${{ env:BUILD_VERSION }}-${{ github.run_number }}
-          tag_name: ${{ env:BUILD_VERSION }}-${{ github.run_number }}
+          release_name: ${{ github.repository }} - ${{ env.BUILD_VERSION }}-${{ github.run_number }}
+          tag_name: ${{ env.BUILD_VERSION }}-${{ github.run_number }}
+          isdraft: false
 

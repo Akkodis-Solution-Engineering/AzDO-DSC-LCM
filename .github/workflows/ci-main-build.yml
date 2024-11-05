@@ -1,10 +1,10 @@
-name: Perform Development Build
+name: CI Main Build
 
 on:
   workflow_dispatch:
   push:
     branches:
-      - Development
+      - main
 
 jobs:
 
@@ -63,7 +63,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          release_name: ${{ github.repository }} - ${{ env.BUILD_VERSION }}-${{ github.run_number }}
+          release_name: ${{ github.repository }} PR Candidate - ${{ env.BUILD_VERSION }}-${{ github.run_number }}
           tag_name: ${{ env.BUILD_VERSION }}-${{ github.run_number }}
-          isdraft: false
+          prerelease: true
 

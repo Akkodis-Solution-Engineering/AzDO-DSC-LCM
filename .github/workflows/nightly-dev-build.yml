@@ -1,0 +1,70 @@
+name: Nightly Dev Build
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
+  
+jobs:
+
+  build:
+    runs-on: windows-latest
+    outputs:
+      build-version: ${{ steps.set-version.outputs.BUILD_VERSION }}
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+
+      - name: Step 1 - Download PowerShell Dependencies
+        shell: pwsh
+        run: Install-Module Datum, Datum.InvokeCommand, powershell-yaml, PSDesiredStateConfiguration -Force
+
+      - name: Step 2 - Attempt to Build the Project
+        shell: pwsh
+        run: .\Build.ps1 -ResolveDependency -Tasks build -CodeCoverageThreshold 70 -PesterScript .\tests.ps1
+
+      - name: Step 3 - Package the Project
+        shell: pwsh
+        run: .\Build.ps1 -Tasks pack
+
+      - name: Step 4 - Set Version Number
+        id: set-version
+        shell: bash
+        run: echo "BUILD_VERSION=$(cat ./output/version.txt)" >> $GITHUB_OUTPUT
+
+      - name: Step 4 - Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ github.run_id }}
+          path: ./output/azdo-dsc-lcm/
+
+  release:
+    needs: build  
+    runs-on: ubuntu-latest
+    steps:
+
+      - env:
+          BUILD_VERSION: ${{ needs.build.outputs.build-version }}
+        name: Set Version
+        run: echo "BUILD_VERSION=${BUILD_VERSION}" >> $GITHUB_ENV
+
+      - name: Step 0 - Print Version
+        shell: pwsh
+        run: write-host $("${{ env.BUILD_VERSION }}-${{ github.run_number }}")
+
+      - name: Step 1 - Download Artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: ${{ github.run_id }}
+
+      - name: Step 2 - Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          release_name: Nightly - ${{ github.repository }} - ${{ env.BUILD_VERSION }}-${{ github.run_number }}
+          tag_name: ${{ env.BUILD_VERSION }}-${{ github.run_number }}
+          body: |
+            This is a nightly build of the project. It is not recommended for production use.
+          isdraft: true
+

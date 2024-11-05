@@ -28,7 +28,7 @@ jobs:
 
       - name: Step 4 - Set Version Number
         shell: bash
-        run: echo "BUILD_VERSION=$(cat .\output\version.txt)" >> $GITHUB_ENV
+        run: echo "BUILD_VERSION=$(cat ./output/version.txt)" >> $GITHUB_ENV
 
       - name: Step 4 - Upload Artifact
         uses: actions/upload-artifact@v3

@@ -42,9 +42,13 @@ jobs:
   release:
     needs: build  
     runs-on: ubuntu-latest
-    env:
-      BUILD_VERSION: ${{ needs.build.outputs.build-version }}
     steps:
+
+      - env:
+          BUILD_VERSION: ${{ needs.build.outputs.build-version }}
+        name: Set Version
+        run: echo "BUILD_VERSION=${BUILD_VERSION}" >> $GITHUB_ENV
+
       - name: Step 0 - Print Version
         shell: pwsh
         run: write-host $("${{ env:BUILD_VERSION }}-${{ github.run_number }}")

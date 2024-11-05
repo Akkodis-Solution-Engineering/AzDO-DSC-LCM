@@ -1,4 +1,4 @@
-name: ci-main-build
+name: CI Main Build
 
 on:
   workflow_dispatch:
@@ -65,6 +65,5 @@ jobs:
         with:
           release_name: ${{ github.repository }} PR Candidate - ${{ env.BUILD_VERSION }}-${{ github.run_number }}
           tag_name: ${{ env.BUILD_VERSION }}-${{ github.run_number }}
-          body_path: ./output/ChangeLog.md 
-          isPrerelease: true
+          prerelease: true
 

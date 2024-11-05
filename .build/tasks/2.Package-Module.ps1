@@ -1,18 +1,9 @@
 task Package_Module {
 
     $destinationPath = "$PSScriptRoot\..\..\Output\azdo-dsc-lcm\"
-    $outputDirectory = "$PSScriptRoot\..\..\Output\"
-
-    if ($IsWindows) {
-        throw "This task is not supported on Windows"
-    }
-
-    # Create nuspec file
-    
+    $outputDirectory = "$PSScriptRoot\..\..\Output\azdo-dsc-lcm.zip"
 
     # Use Tar to package the module
-    Push-Location $outputDirectory
-    zip "azdo-dsc-lcm.zip" ".\azdo-dsc-lcm\" -r
-    Pop-Location
+    Compress-Archive -Path $destinationPath -DestinationPath $outputDirectory -Force
 
 }

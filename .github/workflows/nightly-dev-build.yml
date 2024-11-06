@@ -2,6 +2,8 @@ name: Nightly Dev Build
 
 on:
   workflow_dispatch:
+  branches:
+    - development
   schedule:
     - cron: '0 0 * * *'
   
@@ -66,5 +68,5 @@ jobs:
           tag_name: ${{ env.BUILD_VERSION }}-${{ github.run_number }}
           body: |
             This is a nightly build of the project. It is not recommended for production use.
-          isdraft: true
+          draft: true
 

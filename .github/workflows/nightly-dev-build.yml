@@ -2,8 +2,6 @@ name: Nightly Dev Build
 
 on:
   workflow_dispatch:
-  branches:
-    - development
   schedule:
     - cron: '0 0 * * *'
   
@@ -16,6 +14,8 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
+        with:
+          ref: development
 
       - name: Step 1 - Download PowerShell Dependencies
         shell: pwsh

@@ -29,12 +29,6 @@ class DSCResource : DSCBaseResource {
 
     }
 
-    # Merge properties
-    [DSCResource]$mergeProperties([DSCStub]$stub) {
-        $this.properties = $this.properties + $stub.properties
-        return $this
-    }
-
 }
 
 Function Merge-DSCResourceProperties {

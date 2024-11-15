@@ -1,0 +1,20 @@
+
+parameters: {
+    projectName: 'null',
+    repositoryName: 'null',
+    inheritedParameterName: "TEST" 
+}
+
+variables: {
+  random: 12345
+}
+
+resources:
+
+  - name: Default Git Configuration Permissions
+    type: AzureDevOpsDsc/AzDoGitPermission
+    dependsOn:
+      - AzureDevOpsDsc/AzDoProject/Project
+      - AzureDevOpsDsc/AzDoProjectGroup/CON Readers
+      - AzureDevOpsDsc/AzDoProjectGroup/CON Board Administrators
+    properties:

@@ -6,18 +6,21 @@ class DSCConfigurationFile {
     [HashTable]$variables
     [HashTable[]]$resources
     hidden [bool]$isCompositeResource = $false
+    [string]$configurationDirectory = $null
+    [string]$compositeResourcePath = $null
 
-    DSCConfigurationFile ([string]$configurationFile, [bool]$isCompositeResource) {
-        $this.isCompositeResource = $isCompositeResource
+    DSCConfigurationFile ([string]$configurationFile) {
+        $this.isCompositeResource = $true
         $this.Load($configurationFile)
     }
 
-    DSCConfigurationFile ([string]$configurationFile) {
+    DSCConfigurationFile ([string]$configurationFile, [string]$DSCCompositeResourcePath) {
+        $this.compositeResourcePath = $DSCCompositeResourcePath
         $this.Load($configurationFile)
     }
 
     # Load the Configuration File
-    Load([String] $configurationFile) {
+    load([String] $configurationFile) {
         # Determine the file extension of the provided FilePath
         $fileExtension = [System.IO.Path]::GetExtension($configurationFile)
         Write-Verbose "File extension determined: $fileExtension"
@@ -33,17 +36,23 @@ class DSCConfigurationFile {
             throw "[DSCResources] Unknown file extension ($fileExtension)"
         }
 
-        $this.resources = $pipeline.resources
-
+        # Parse the Resources
+        if ($null -eq $pipeline.resources) {
+            $this.resources = ConvertTo-Resource -task $pipeline.resources -compositeResourcePath $this.compositeResourcePath
+        }
+        
+        # Parse the Parameters
         if ($null -ne $pipeline.parameters) {
             # Load the parameters/ If the variables already exist in memory parse them in.
             $this.parameters = GetParameterValues -Source $pipeline.parameters
         }
 
+        # Variables
         if ($null -ne $pipeline.variables) {
             $this.variables = SetVariables -Source $pipeline.variables
         }
 
+        
     }
 
 }

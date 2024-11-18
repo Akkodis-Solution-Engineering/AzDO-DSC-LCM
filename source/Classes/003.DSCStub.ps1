@@ -8,8 +8,8 @@ class DSCStub : DSCBaseResource {
         }
 
         $this.name = $ht.name
-        $this.type = $ht.type
-        $this.Properties = $ht.properties
+        $this.type = [DSCResourceType]::Stub
+        $this.properties = $ht.properties
         $this.merge_with = $ht.merge_with
 
     }

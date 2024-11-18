@@ -1,25 +1,25 @@
-class DSCResource : DSCBaseResource {
+class DSCYAMLResource : DSCBaseResource {
     [string] $condition
     [string] $postExecutionScript
     [string] $dependsOn
     [bool] $mergable = $false
 
-    DSCResource([hashtable]$ht) {
-        # Name, Type, Properties are mandatory
+    DSCYAMLResource([hashtable]$ht) {
 
+        # Name, Type, Properties are mandatory
         if (-not $ht.ContainsKey('name')) {
-            throw "Name is mandatory"
+            throw "[DSCYAMLResource] Name is mandatory"
         }
         if (-not $ht.ContainsKey('type')) {
-            throw "Type is mandatory"
+            throw "[DSCYAMLResource] Type is mandatory"
         }
         # Properties is mandatory
         if (($null -eq $ht.properties) -and ($ht.properties -isnot [hashtable[]])) {
-            throw "Properties is mandatory"
+            throw "[DSCYAMLResource] Properties is mandatory"
         }
 
         $this.name = $ht['name']
-        $this.type = $ht['type']
+        $this.type = [DSCResourceType]::Resource
         $this.properties = $ht['properties']
 
         $this.condition = $ht['condition']
@@ -28,14 +28,5 @@ class DSCResource : DSCBaseResource {
         $this.mergable = $ht['mergable']
 
     }
-
-}
-
-Function Merge-DSCResourceProperties {
-    param(
-        [Hashtable[]]$resourceProperties,
-        [Hashtable[]]$stubProperties
-    )
-
 
 }

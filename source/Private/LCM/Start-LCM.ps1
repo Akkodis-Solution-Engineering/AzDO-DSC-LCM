@@ -38,7 +38,8 @@ function Start-LCM {
         [string] $FilePath, # The path to the configuration file (.yaml/.yml or .json)
         [ValidateSet("Test", "Set")] # Ensures that Mode can only be 'Test' or 'Set'
         [string] $Mode = "Test", # Default mode is 'Test', can be set to 'Set' for applying changes,
-        [String] $ReportPath = $null # Optional parameter for specifying a report path
+        [String] $ReportPath = $null, # Optional parameter for specifying a report path
+        [String] $DSCCompositeResourcePath = $null
     )
 
     # Clear StopTaskProcessing variable
@@ -46,42 +47,12 @@ function Start-LCM {
 
     $reporting = [System.Collections.Generic.List[PSCustomObject]]::New()
 
-    # Determine the file extension of the provided FilePath
-    $fileExtension = [System.IO.Path]::GetExtension($FilePath)
-    Write-Verbose "File extension determined: $fileExtension"
+    $pipeline = [DSCConfigurationFile]::New($FilePath, $DSCCompositeResourcePath)
 
-    # Load the configuration from the YAML or JSON file into the $pipeline variable
-    if ($fileExtension -eq ".yaml" -or $fileExtension -eq ".yml") {
-        $pipeline = Get-Content $FilePath | ConvertFrom-Yaml
-        Write-Verbose "Loaded YAML configuration from file: $FilePath"
-    }
-    elseif ($fileExtension -eq ".json") {
-        $pipeline = Get-Content $FilePath | ConvertFrom-Json -AsHashtable
-        Write-Verbose "Loaded JSON configuration from file: $FilePath"
-    }
+    Write-Host "--> Merging Partial Resources with Parents"
 
-    # Clear any existing data in these hashtables before populating them
-    $parameters.Clear()
-    $variables.Clear()
-    $references.Clear()
-    Write-Verbose "Cleared existing data in parameters, variables, and references hashtables"
+    $tasks = Invoke-CustomTask -Tasks $pipeline.resources -CustomTaskName "Merge-StubResources"
 
-    Write-Host "---------------------------------------------------------------------" -ForegroundColor Green
-    Write-Host "Processing configuration file: $FilePath" -ForegroundColor Green
-    Write-Host "Mode: $Mode" -ForegroundColor Green
-    Write-Host "Report Path: $ReportPath" -ForegroundColor Green
-    Write-Host "---------------------------------------------------------------------" -ForegroundColor Green
-    Write-Host "--> Setting Variables:" -ForegroundColor Green
-
-    # Retrieve default values for parameters and set variables based on the pipeline's content
-    #$defaultValues = GetDefaultValues -Source $pipeline.parameters
-    $parameterizedProperties = GetDefaultValues -Source $pipeline.parameters
-
-    SetVariables -Source $pipeline.variables -Target $variables
-    SetVariables -Source $defaultValues -Target $parameters
-
-    Write-Verbose "Retrieved default values for parameters and set variables based on pipeline content"
-    
     Write-Host "--> Sorting tasks based on dependencies:" -ForegroundColor Green
 
     # Sort the tasks based on their dependencies to ensure correct execution order

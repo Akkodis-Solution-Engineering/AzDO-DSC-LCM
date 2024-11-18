@@ -146,6 +146,7 @@ function Invoke-AzDoLCM {
     # Create a hashtable to store the parameters
     $params = @{
         Mode = $Mode
+        DSCCompositeResourcePath = Join-Path $DatumConfigurationPath 'CompositeResources'
     }
 
     # If the ReportPath is provided, add it to the parameters

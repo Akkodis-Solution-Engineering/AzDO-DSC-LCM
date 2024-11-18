@@ -10,7 +10,7 @@ class DSCCompositeResource : DSCBaseResource {
     # Therefore when the type is a DSC Resource, presume it's a composite
     # Resource
 
-    DSCCompositeResource ([string]$compositeDirectory, [HashTable]$task, [String]$resource) {
+    DSCCompositeResource ([String]$resource, [string]$compositeDirectory) {
 
         # Perform a lookup for the DSC Resource within the Composite Directory and verify that it exists
         $this.linkedFileName = Join-Path $compositeDirectory "$resource.yml"
@@ -24,7 +24,7 @@ class DSCCompositeResource : DSCBaseResource {
         }
 
         # Load the Configuration File as a Composite Resource
-
+        $this.type = [DSCResourceType]::Composite
         $this.resource = [DSCConfigurationFile]::New($this.linkedFileName, $true)
 
     }

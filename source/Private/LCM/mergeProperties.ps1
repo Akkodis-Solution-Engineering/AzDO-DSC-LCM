@@ -11,7 +11,7 @@ function Join-Properties {
 
 
     # If both source and merge ar null, return null.
-    if ((-not($source)) -and (-not($merge))) {
+    if (($null -eq $source) -and ($null -eq $merge)) {
         return $null
     }
 
@@ -44,10 +44,46 @@ function Join-Properties {
             }
 
             # If the key is a collection (e.g., array)
-            elseif (($source[$key] -is [System.Collections.ICollection]) -and ($merge[$key] -is [System.Collections.ICollection])) {
+            elseif ($source[$key].GetType().BaseType.Name -eq 'Array') {
+
                 # Combine the collections
-                $result[$key] += $source[$key] + $merge[$key]
-                # Please note that further work is required to remove duplicate values.
+                $combined = $source[$key] + $merge[$key]
+                # Attempt to remove duplicates
+                
+                # If the values within the collection are an array of strings, we can use Select-Object -Unique
+                $array, $collection = $combined.Where({ $_.GetType().Name -in 'String','Int32','Boolean' }, 'Split')
+             
+                # Iterate through the collection and remove duplicates
+                $arrayList = [System.Collections.Generic.List[Object]]::new()
+
+                # If the values within the collection are not strings, we need to use a different method
+                ForEach ($item in $collection) {
+                    
+                    # Create a custom hashtable that stores an ordered hashtable and a compressed version of the ordered hashtable.
+                    $ht = @{
+                        Value = Sort-Hashtable $item
+                        compressed = $null
+                    }
+
+                    $compressed = $ht.Value | ConvertTo-Json -Compress
+                    # Check for duplicates within the arraylist
+                    
+                    $exists = $arrayList | Where-Object { $_.compressed -eq $compressed }
+
+                    # If the item already exists, skip it
+                    if (@($exists).Count -ne 0) {
+                        write-verbose "[Join-Properties] Duplicate found: $compressed"
+                        $arrayList.Add($ht)
+                    }
+
+                }
+
+                if ($arrayList.Count -eq 0) {
+                    $result[$key] = $array | Select-Object -Unique
+                } else {
+                    $result[$key] = ($array | Select-Object -Unique) + $arrayList.Value
+                }
+
             }
 
             # If the key is a string array

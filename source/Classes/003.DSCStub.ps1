@@ -3,7 +3,7 @@ class DSCStub : DSCBaseResource {
 
     DSCStub ([HashTable] $ht) {
         # Ensure all mandatory properties are provided
-        if ((-not($ht.name)) -or (-not ($ht.type)) -or (-not ($ht.properties)) -or (-not($ht.merge_with))) {
+        if ((-not($ht.name)) -or (-not ($ht.properties)) -or (-not($ht.merge_with))) {
             throw "[DSCStub] Error: All properties (name, type, properties, merge_with) must be provided."
         }
 

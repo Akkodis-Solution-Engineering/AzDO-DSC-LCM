@@ -1,6 +1,6 @@
 class DSCBaseResource {
     [string] $name
-    [DSCResourceType] $type    
+    [string] $type  
     [hashtable]$properties
 
     [string] getFullResourceName() {

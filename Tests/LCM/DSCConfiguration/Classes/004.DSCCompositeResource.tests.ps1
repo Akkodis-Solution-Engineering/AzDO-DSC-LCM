@@ -4,16 +4,12 @@ Describe "DSCCompositeResource Class Tests" {
     BeforeAll {
         
         # Mocking the DSCBaseResource class
-        $enumsResource = (Get-FunctionPath 'DSCResourceType.ps1').FullName
-
         $DSCConfigurationFile = (Get-FunctionPath '000.DSCConfigurationFile.ps1').FullName
         $DSCBaseResource = (Get-FunctionPath '001.DSCBaseResource.ps1').FullName
         $DSCCompositeResource = (Get-FunctionPath '004.DSCCompositeResource.ps1').FullName
-        
-        
+                
         $mergePropertiesPath = (Get-FunctionPath 'mergeProperties.ps1').FullName
 
-        . $enumsResource
         . $DSCConfigurationFile
         . $DSCBaseResource
         . $DSCCompositeResource
@@ -25,10 +21,19 @@ Describe "DSCCompositeResource Class Tests" {
     Context "Constructor Tests" {
         BeforeAll {
             # Setup a temporary directory for testing
-            $testDirectory = Join-Path -Path (Get-Location) -ChildPath "TestCompositeResources"
+            $testDirectory = Join-Path -Path $TestDrive -ChildPath "TestCompositeResources"
             if (-not (Test-Path -LiteralPath $testDirectory)) {
                 New-Item -ItemType Directory -Path $testDirectory | Out-Null
             }
+
+            $task = @{
+                name = "TestTask"
+                type = "TestType"
+                properties = @{
+                    key = "value"
+                }
+            }
+
         }
 
         AfterAll {
@@ -38,7 +43,7 @@ Describe "DSCCompositeResource Class Tests" {
 
         It "Should throw error if the composite resource file does not exist" {
             $resourceName = "NonExistentResource"
-            { [DSCCompositeResource]::new($resourceName, $testDirectory) } | Should -Throw "[DSCCompositeResource] Error. The composite resource cannot be found. Please check that the file is named correctly and try again. FilePath: $(Join-Path $testDirectory "$resourceName.yml")"
+            { [DSCCompositeResource]::new($resourceName, $testDirectory, $task) } | Should -Throw "*Error. The composite resource cannot be found. Please check that the file is named correctly and try again.*"
         }
 
         It "Should initialize all properties correctly when the composite resource file exists" {
@@ -48,11 +53,14 @@ Describe "DSCCompositeResource Class Tests" {
             # Create a mock composite resource file
             New-Item -ItemType File -Path $linkedFileName | Out-Null
 
-            $compositeResource = [DSCCompositeResource]::new($resourceName, $testDirectory)
+            $compositeResource = [DSCCompositeResource]::new($resourceName, $testDirectory, $task)
 
+            $compositeResource.name | Should -Be $task.name
+            $compositeResource.type | Should -Be $task.type
+            $compositeResource.properties | Should -Be $task.properties
             $compositeResource.linkedFileName | Should -Be $linkedFileName
-            $compositeResource.type | Should -Be [DSCResourceType]::Composite
-            $compositeResource.resource.filePath | Should -Be $linkedFileName
+            $compositeResource.resource.configurationFilePath | Should -Be $linkedFileName
         }
+        
     }
 }

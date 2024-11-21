@@ -54,6 +54,7 @@ class DSCConfigurationFile {
     [HashTable]$parameters
     [HashTable]$variables
     [HashTable[]]$resources
+    hidden [string]$configurationFilePath
     hidden [bool]$isCompositeResource = $false
     [string]$configurationDirectory = $null
     [string]$compositeResourcePath = $null
@@ -70,6 +71,9 @@ class DSCConfigurationFile {
 
     # Load the Configuration File
     load([String] $configurationFile) {
+
+        $this.configurationFilePath = $configurationFile
+
         # Determine the file extension of the provided FilePath
         $fileExtension = [System.IO.Path]::GetExtension($configurationFile)
         Write-Verbose "File extension determined: $fileExtension"

@@ -1,43 +1,39 @@
 
-Describe "DSCYAMLResource Class Tests" -Tag Unit {
+Describe "DSC_Resource Class Tests" -Tag Unit {
 
     BeforeAll {
 
         $DSCBaseResource = (Get-FunctionPath '001.DSCBaseResource.ps1').FullName
-        $DSCYAMLResource = (Get-FunctionPath '002.DSCYAMLResource.ps1').FullName
+        $DSC_Resource = (Get-FunctionPath '002.DSC_Resource.ps1').FullName
 
         . $DSCBaseResource
-        . $DSCYAMLResource
+        . $DSC_Resource
         
-        # Mocking the DSCResourceType enumeration or class if it's not defined elsewhere
-        Enum DSCResourceType {
-            Resource
-        }
-
     }
 
     Context "Constructor Tests" {
 
         It "Should throw error if name is missing" {
             $ht = @{
-                type       = [DSCResourceType]::Resource
+                type       = 'Module\Type'
                 properties = @(@{})
             }
-            { [DSCYAMLResource]::new($ht) } | Should -Throw "*Name is mandatory*"
+            { [DSC_Resource]::new($ht) } | Should -Throw "*Name is mandatory*"
         }
 
         It "Should throw error if properties are missing or invalid" {
             $ht = @{
                 name = "TestResource"
-                type = [DSCResourceType]::Resource
+                type = 'Module\Type'
             }
-            { [DSCYAMLResource]::new($ht) } | Should -Throw "*Properties is mandatory*"
+            { [DSC_Resource]::new($ht) } | Should -Throw "*Properties is mandatory*"
         }
 
         It "Should initialize all properties correctly when valid hashtable is provided" {
 
             $ht = @{
                 name               = "TestResource"
+                type               = 'Module\Type'
                 properties         = @{ key = "value" }
                 condition          = "SomeCondition"
                 postExecutionScript = "SomeScript"
@@ -45,15 +41,15 @@ Describe "DSCYAMLResource Class Tests" -Tag Unit {
                 mergable           = $true
             }
 
-            $resource = [DSCYAMLResource]::new($ht)
+            $resource = [DSC_Resource]::new($ht)
 
             $resource.name  | Should -Be "TestResource"
+            $resource.type  | Should -Be 'Module\Type'
             $resource.properties    | Should -Be $ht['properties']
             $resource.condition     | Should -Be "SomeCondition"
             $resource.postExecutionScript | Should -Be "SomeScript"
             $resource.dependsOn     | Should -Be "SomeDependency"
             $resource.mergable      | Should -Be $true
-            $resource.type  | Should -Be 'Resource'
 
         }
 

@@ -74,6 +74,7 @@ resources:
             $configFile = [DSCConfigurationFile]::new($mockYamlFile)
             $configFile.load($mockYamlFile)
 
+            $configFile.configurationFilePath | Should -Be $mockYamlFile
             $configFile.parameters | Should -Not -BeNullOrEmpty
             $configFile.variables | Should -Not -BeNullOrEmpty
             $configFile.resources | Should -Not -BeNullOrEmpty
@@ -83,6 +84,7 @@ resources:
             $configFile = [DSCConfigurationFile]::new($mockJsonFile)
             $configFile.load($mockJsonFile)
 
+            $configFile.configurationFilePath | Should -Be $mockJsonFile
             $configFile.parameters | Should -Not -BeNullOrEmpty
             $configFile.variables | Should -Not -BeNullOrEmpty
             $configFile.resources | Should -Not -BeNullOrEmpty

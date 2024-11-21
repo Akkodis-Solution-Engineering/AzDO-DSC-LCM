@@ -6,14 +6,12 @@ Describe "DSCStub Class Tests" -Tag Unit {
     BeforeAll {
 
         # Mocking the DSCBaseResource class
-        $enumsResource = (Get-FunctionPath 'DSCResourceType.ps1').FullName
         $DSCBaseResource = (Get-FunctionPath '001.DSCBaseResource.ps1').FullName
-        $DSCResource = (Get-FunctionPath '002.DSCYAMLResource.ps1').FullName
+        $DSCResource = (Get-FunctionPath '002.DSC_Resource.ps1').FullName
         $DSCStubResource = (Get-FunctionPath '003.DSCStub.ps1').FullName
 
         $mergePropertiesPath = (Get-FunctionPath 'mergeProperties.ps1').FullName
 
-        . $enumsResource
         . $DSCBaseResource
         . $DSCResource
         . $DSCStubResource
@@ -37,12 +35,13 @@ Describe "DSCStub Class Tests" -Tag Unit {
                 name       = "StubResource"
                 properties = @{ key = "value" }
                 merge_with = "TargetResource"
+                type       = "MockType"
             }
 
             $stub = [DSCStub]::new($ht)
 
             $stub.name | Should -Be "StubResource"
-            $stub.type | Should -Be 'Stub'
+            $stub.type | Should -Be 'MockType'
             $stub.properties | Should -Be $ht['properties']
             $stub.merge_with | Should -Be "TargetResource"
         }
@@ -53,19 +52,20 @@ Describe "DSCStub Class Tests" -Tag Unit {
             $ht = @{
                 name       = "StubResource"
                 properties = @{ key = "value" }
+                type        = "MockType"
                 merge_with = "NonExistentResource"
             }
             $stub = [DSCStub]::new($ht)
 
             $dscResources = @(
-                [DSCYAMLResource]::new(@{
+                [DSC_Resource]::new(@{
                     name       = "SomeResource"
-                    type       = [DSCResourceType]::Resource
+                    type       = 'MockType'
                     properties = @{ key = "value" }
                 })
-                [DSCYAMLResource]::new(@{
+                [DSC_Resource]::new(@{
                     name       = "SomeResource2"
-                    type       = [DSCResourceType]::Resource
+                    type       = 'MockType'                    
                     properties = @{ key = "value" }
                 })                
             )
@@ -77,19 +77,20 @@ Describe "DSCStub Class Tests" -Tag Unit {
             $ht = @{
                 name       = "StubResource"
                 properties = @{ key = "value" }
-                merge_with = "Resource\DuplicateResource"
+                merge_with = "MockType\DuplicateResource"
+                type = "MockType"
             }
             $stub = [DSCStub]::new($ht)
 
             $dscResources = @(
-                [DSCYAMLResource]::new(@{
+                [DSC_Resource]::new(@{
                     name       = "DuplicateResource"
-                    type       = [DSCResourceType]::Resource
+                    type       = 'MockType'
                     properties = @{ key = "value" }
                 })
-                [DSCYAMLResource]::new(@{
+                [DSC_Resource]::new(@{
                     name       = "DuplicateResource"
-                    type       = [DSCResourceType]::Resource
+                    type       = 'MockType'
                     properties = @{ key = "value" }
                 })                
             )
@@ -101,14 +102,15 @@ Describe "DSCStub Class Tests" -Tag Unit {
             $ht = @{
                 name       = "StubResource"
                 properties = @{ key = "value" }
-                merge_with = "Resource\NonMergeableResource"
+                merge_with = "Type\NonMergeableResource"
+                type = "MockType"
             }
             $stub = [DSCStub]::new($ht)
 
             $dscResources = @(
-                [DSCYAMLResource]::new(@{
+                [DSC_Resource]::new(@{
                     name       = "NonMergeableResource"
-                    type       = [DSCResourceType]::Resource
+                    type       = 'Type'
                     properties = @{ key = "value" }
                 })
             )
@@ -120,14 +122,15 @@ Describe "DSCStub Class Tests" -Tag Unit {
             $ht = @{
                 name       = "StubResource"
                 properties = @{ key = "newValue" }
-                merge_with = "Resource\MergeableResource"
+                merge_with = "MockType\MergeableResource"
+                type = "MockType"
             }
             $stub = [DSCStub]::new($ht)
 
             $dscResources = @(
-                [DSCYAMLResource]::new(@{
+                [DSC_Resource]::new(@{
                     name       = "MergeableResource"
-                    type       = [DSCResourceType]::Resource
+                    type       = 'MockType'
                     properties = @{ key = "value" }
                     mergable   = $true
                 })                

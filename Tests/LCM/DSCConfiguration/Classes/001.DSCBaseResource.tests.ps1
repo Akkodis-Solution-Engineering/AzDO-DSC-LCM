@@ -6,12 +6,6 @@ Describe "DSCBaseResource Class Tests" -Tag Unit {
         $DSCBaseResource = (Get-FunctionPath '001.DSCBaseResource.ps1').FullName
         . $DSCBaseResource
 
-        # Mocking the DSCResourceType enumeration or class if it's not defined elsewhere
-        Enum DSCResourceType {
-            TypeA
-            TypeB
-        }
-
     }
 
 
@@ -24,7 +18,7 @@ Describe "DSCBaseResource Class Tests" -Tag Unit {
 
         It "Should initialize type property correctly" {
             $resource = [DSCBaseResource]::new()
-            $resource.type = [DSCResourceType]::TypeA
+            $resource.type = 'TypeA'
             $resource.type | Should -Be 'TypeA'
 
         }
@@ -39,7 +33,7 @@ Describe "DSCBaseResource Class Tests" -Tag Unit {
         It "Should return correct full resource name" {
             $resource = [DSCBaseResource]::new()
             $resource.name = "MyResource"
-            $resource.type = [DSCResourceType]::TypeA
+            $resource.type = 'TypeA'
 
             $fullResourceName = $resource.getFullResourceName()
             $fullResourceName | Should -Be "TypeA\MyResource"
@@ -47,7 +41,7 @@ Describe "DSCBaseResource Class Tests" -Tag Unit {
 
         It "Should handle null name gracefully" {
             $resource = [DSCBaseResource]::new()
-            $resource.type = [DSCResourceType]::TypeB
+            $resource.type = 'TypeB'
 
             { $resource.getFullResourceName() } | Should -Throw
         }

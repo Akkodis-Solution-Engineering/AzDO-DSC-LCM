@@ -3,18 +3,18 @@ class DSCStub : DSCBaseResource {
 
     DSCStub ([HashTable] $ht) {
         # Ensure all mandatory properties are provided
-        if ((-not($ht.name)) -or (-not ($ht.properties)) -or (-not($ht.merge_with))) {
+        if ((-not($ht.name)) -or (-not ($ht.properties)) -or (-not($ht.merge_with) -or (-not($ht.type)))) {
             throw "[DSCStub] Error: All properties (name, type, properties, merge_with) must be provided."
         }
 
         $this.name = $ht.name
-        $this.type = [DSCResourceType]::Stub
+        $this.type = $ht.type
         $this.properties = $ht.properties
         $this.merge_with = $ht.merge_with
 
     }
 
-    [DSCYAMLResource[]] merge([DSCYAMLResource[]]$dscResources) {
+    [DSC_Resource[]] merge([DSC_Resource[]]$dscResources) {
 
         # Locate the resource index position
         $indexPos = 0 .. ($dscResources.count - 1) | Where-Object {

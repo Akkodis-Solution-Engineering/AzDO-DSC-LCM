@@ -21,7 +21,7 @@ function ConvertTo-Resource {
             { $task.Type -match '^composite(\\|\/)(?<resource>.+$)' } {
                 # Parse the Composite Resource
                 $null = $task.Type -match '^composite(\\|\/)(?<resource>.+$)'
-                $null = $list.Add([DSCCompositeResource]::New($matches.resource, $compositeResourcePath))
+                $null = $list.Add([DSCCompositeResource]::New($matches.resource, $compositeResourcePath, $task))
                 break
             }
             # If the property 'merge_with' is set, then it's a DSCStub.
@@ -32,7 +32,7 @@ function ConvertTo-Resource {
             }
             # All other properties are treated as DSC resources.
             default {
-                $null = $list.Add([DSCYAMLResource]::New($task))
+                $null = $list.Add([DSC_Resource]::New($task))
                 break
             }
 

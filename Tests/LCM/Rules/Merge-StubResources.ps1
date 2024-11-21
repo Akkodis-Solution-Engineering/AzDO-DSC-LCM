@@ -9,7 +9,7 @@ Describe "Merge-StubResources" -Tag Unit, LCM, Rules, Sort {
 
         $DSCConfigurationFile = (Get-FunctionPath '000.DSCConfigurationFile.ps1').FullName
         $DSCBaseResource = (Get-FunctionPath '001.DSCBaseResource.ps1').FullName
-        $DSCYAMLResource = (Get-FunctionPath '002.DSCYAMLResource.ps1').FullName
+        $DSC_Resource = (Get-FunctionPath '002.DSC_Resource.ps1').FullName
         $DSCStub = (Get-FunctionPath '003.DSCStub.ps1').FullName
         $DSCCompositeResource = (Get-FunctionPath '004.DSCCompositeResource.ps1').FullName
 
@@ -21,7 +21,7 @@ Describe "Merge-StubResources" -Tag Unit, LCM, Rules, Sort {
 
         . $DSCConfigurationFile
         . $DSCBaseResource
-        . $DSCYAMLResource
+        . $DSC_Resource
         . $DSCStub
         . $DSCCompositeResource
         . $joinPropertiesFilePath

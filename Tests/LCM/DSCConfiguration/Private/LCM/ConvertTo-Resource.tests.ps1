@@ -8,7 +8,7 @@ Describe "ConvertTo-Resource" -Tag Unit, LCM, Configuration {
         $DSCEnumDSCResourceType = (Get-FunctionPath 'DSCResourceType.ps1').FullName
 
         $DSCBaseResource = (Get-FunctionPath '001.DSCBaseResource.ps1').FullName
-        $DSCYAMLResource = (Get-FunctionPath '002.DSCYAMLResource.ps1').FullName
+        $DSC_Resource = (Get-FunctionPath '002.DSC_Resource.ps1').FullName
         $DSCStub = (Get-FunctionPath '003.DSCStub.ps1').FullName
         $DSCCompositeResource = (Get-FunctionPath '004.DSCCompositeResource.ps1').FullName
 
@@ -21,7 +21,7 @@ Describe "ConvertTo-Resource" -Tag Unit, LCM, Configuration {
         . $DSCEnumDSCResourceType
 
         . $DSCBaseResource
-        . $DSCYAMLResource
+        . $DSC_Resource
         . $DSCStub
         . $DSCCompositeResource
 
@@ -70,7 +70,7 @@ Describe "ConvertTo-Resource" -Tag Unit, LCM, Configuration {
             }
         }
         $result = $task | ConvertTo-Resource -compositeResourcePath "SomePath"
-        $result[0].GetType().Name | Should -Be "DSCYAMLResource"
+        $result[0].GetType().Name | Should -Be "DSC_Resource"
     }
 
     It "Should handle multiple tasks from pipeline" {
@@ -108,7 +108,7 @@ Describe "ConvertTo-Resource" -Tag Unit, LCM, Configuration {
 
         $results[0].GetType().Name | Should -Be "DSCCompositeResource"
         $results[1].GetType().Name | Should -Be "DSCStub"
-        $results[2].GetType().Name | Should -Be "DSCYAMLResource"
+        $results[2].GetType().Name | Should -Be "DSC_Resource"
     }
 
 }

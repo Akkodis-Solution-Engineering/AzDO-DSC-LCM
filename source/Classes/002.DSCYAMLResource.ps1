@@ -10,9 +10,6 @@ class DSCYAMLResource : DSCBaseResource {
         if (-not $ht.ContainsKey('name')) {
             throw "[DSCYAMLResource] Name is mandatory"
         }
-        if (-not $ht.ContainsKey('type')) {
-            throw "[DSCYAMLResource] Type is mandatory"
-        }
         # Properties is mandatory
         if (($null -eq $ht.properties) -and ($ht.properties -isnot [hashtable[]])) {
             throw "[DSCYAMLResource] Properties is mandatory"

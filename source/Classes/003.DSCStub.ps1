@@ -14,29 +14,29 @@ class DSCStub : DSCBaseResource {
 
     }
 
-    [DSCResource[]] merge([DSCResource[]]$dscResources) {
+    [DSCYAMLResource[]] merge([DSCYAMLResource[]]$dscResources) {
 
         # Locate the resource index position
-        $indexPos = 0 .. $dscResources.count | Where-Object {
+        $indexPos = 0 .. ($dscResources.count - 1) | Where-Object {
             $dscResources[$_].getFullResourceName() -eq $this.merge_with
         }
 
         # If the resource is missing, throw an error
-        if (-not $indexPos) {
+        if (@($indexPos).count -eq 0) {
             throw "[DSCStub] Error: Resource '$($this.merge_with)' not found in provided DSC resources."
         }
         # If there are multiple resources found, throw an error
-        if (-not $indexPos.count -ne 1) {
+        if ($indexPos.count -ne 1) {
             throw "[DSCStub] Error: Resource '$($this.merge_with)' was found multiple times (count $($indexPos.count) in provided DSC resources."
         }
 
         # Ensure that the resource contains the 'mergeable' property and is true. If not, block the merge.
-        if ($dscResources[$_].'mergeable' -eq $false) {
-            throw "[DSCStub] Error: Resource '$($this.merge_with)' does not contain a 'mergeable' property."
+        if (($null -eq $dscResources[$indexPos].'mergable') -or ($dscResources[$indexPos].'mergable' -eq $false)) {
+            throw "[DSCStub] Error: Resource '$($this.merge_with)' does not contain a 'mergable' property."
         }
 
         # Merge the Properties
-        $dscResources[$_].properties = mergeProperties -source $dscResources[$_].properties -merge $this.properties
+        $dscResources[$indexPos].properties = Join-Properties -source $dscResources[$indexPos].properties -merge $this.properties
 
         return $dscResources
         

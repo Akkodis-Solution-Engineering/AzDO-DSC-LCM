@@ -54,7 +54,9 @@ Function Get-FunctionPath {
         $Global:TestPaths = Get-ChildItem -LiteralPath $ScriptRoot -Recurse -File -Include *.ps1 | Where-Object {
             ($_.FullName -notlike "*Tests.ps1") -and
             ($_.FullName -notlike '*\output\*') -and
-            ($_.FullName -notlike '*\tests\*')
+            ($_.FullName -notlike '*\tests\*') -and
+            ($_.FullName -notlike '*/output/*') -and
+            ($_.FullName -notlike '*/tests/*')
         }
     }
 

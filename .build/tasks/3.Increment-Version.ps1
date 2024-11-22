@@ -2,7 +2,7 @@ task Increment_Version {
 
     $outputDirectory = "$PSScriptRoot\..\..\Output\"
 
-    $latestVersion = & git tag | Where-Object { $_ -match "v\d+\.\d+\.\d+" } | Sort-Object -Descending | Select-Object -First 1
+    $latestVersion = & git tag | Where-Object { $_ -match "\d+\.\d+\.\d+" } | Sort-Object -Descending | Select-Object -First 1
     if ([String]::IsNullOrEmpty($latestVersion)) {
         $latestVersion = "0.0.0"
     }

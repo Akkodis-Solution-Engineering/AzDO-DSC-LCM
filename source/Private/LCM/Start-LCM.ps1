@@ -35,16 +35,19 @@ Invokes the DSC configuration in 'Set' mode using the specified JSON configurati
 function Start-LCM {
     # Declare parameters for the function with default values and validation where needed
     param (
+        [Parameter(Mandatory = $true)]
         [string] $FilePath, # The path to the configuration file (.yaml/.yml or .json)
         [ValidateSet("Test", "Set")] # Ensures that Mode can only be 'Test' or 'Set'
         [string] $Mode = "Test", # Default mode is 'Test', can be set to 'Set' for applying changes,
         [String] $ReportPath = $null, # Optional parameter for specifying a report path
-        [String] $DSCCompositeResourcePath = $null
+        [Parameter(Mandatory = $true)]
+        [String] $DSCCompositeResourcePath
     )
 
     # Clear StopTaskProcessing variable
     $script:StopTaskProcessing = $false
-
+    $references.Clear()
+    
     $reporting = [System.Collections.Generic.List[PSCustomObject]]::New()
 
     $pipeline = [DSCConfigurationFile]::New($FilePath, $DSCCompositeResourcePath)
@@ -131,9 +134,6 @@ function Start-LCM {
         $resourceType = $task.type.Split("/")[1]
         Write-Verbose "Extracted module name: $module and resource type: $resourceType"
         
-        # Iterate through the properties of the task and interpolate parameterized values
-        #$Property = Expand-ParameterInArray -InputArray $task.properties
-
         # Replace any variables in the properties with their actual values
         $Property = Expand-HashTable -InputHashTable $task.properties
 
@@ -170,13 +170,28 @@ function Start-LCM {
         }
         elseif ($Mode -eq "Set") {
 
-            $resourceParameters.Method = "Set"
-
             try {
+                # Execute the 'Set' method to make changes
+                $resourceParameters.Method = "Set"
                 $setResult = Invoke-DscResource @resourceParameters
                 Write-Verbose "Executed 'Set' method to make changes: [$($task.type)/$($task.name)]"
-                $Message = "Resource set to desired state"
-                $Result = "PASS"
+
+                # Retest the resource to ensure the changes were applied successfully
+                $resourceParameters.Method = "Test"
+                $result = Invoke-DscResource @resourceParameters
+                Write-Verbose "Executed 'Test' method to verify changes: [$($task.type)/$($task.name)]"
+
+                # If not in the desired state and Mode is 'Set', execute the 'Set' method to apply changes
+                if ($result.InDesiredState) {
+                    $Message = "Resource set to desired state"
+                    $Result = "PASS"
+                    Write-Verbose "Resource set to desired state: [$($task.type)/$($task.name)]"
+                } else {
+                    $Message = "Failed to set resource to desired state"
+                    $Result = "FAIL"
+                    Write-Verbose "Failed to set resource to desired state: [$($task.type)/$($task.name)]"
+                }
+
             }
             catch {
                 Write-Error "Failed to apply changes with 'Set' method: [$($task.type)/$($task.name)]"

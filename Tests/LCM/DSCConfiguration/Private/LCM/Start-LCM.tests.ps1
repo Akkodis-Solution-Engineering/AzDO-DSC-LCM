@@ -4,8 +4,7 @@ Describe "Start-LCM Function Tests" -Tag Unit {
 
         # Load the functions to test
         $preParseFilePath = (Get-FunctionPath 'Start-LCM.ps1').FullName
-        $getDefaultValuesPath = (Get-FunctionPath 'GetDefaultValues.ps1').FullName
-        $SetVariablesPath = (Get-FunctionPath 'SetVariables.ps1').FullName
+
         $InvokeCustomTaskPath = (Get-FunctionPath 'Invoke-CustomTask.ps1').FullName
         $InvokePreParseRulesPath = (Get-FunctionPath 'Invoke-PreParseRules.ps1').FullName
         $InvokeFormatTasksPath = (Get-FunctionPath 'Invoke-FormatTasks.ps1').FullName
@@ -13,61 +12,60 @@ Describe "Start-LCM Function Tests" -Tag Unit {
         $StopTaskProcessingPath = (Get-FunctionPath 'Stop-TaskProcessing.ps1').FullName
 
         . $preParseFilePath
-        . $getDefaultValuesPath
-        . $SetVariablesPath
         . $InvokeCustomTaskPath
         . $InvokePreParseRulesPath
         . $InvokeFormatTasksPath
         . $InvokeExpandHashTablePath
         . $StopTaskProcessingPath
 
+        function Load-Mock {
+
+            return @{
+                parameters = @{ 'param1' = 'value1' }
+                variables = @{ 'var1' = 'value1' }
+                resources = @(
+                                @{
+                                    type = "Module/Resource"
+                                    name = "Resource1"
+                                    properties = @{
+                                    prop1 = "value1"
+                                    }
+                                }
+                            )
+            }
+        }
+
+        class DSCConfigurationFile {
+
+            [HashTable]$parameters
+            [HashTable]$variables
+            [HashTable[]]$resources
+            hidden [string]$configurationFilePath
+            hidden [bool]$isCompositeResource = $false
+
+            DSCConfigurationFile ([string]$configurationFile, [string]$DSCCompositeResourcePath) {
+
+                if ($null -eq $configurationFile) {
+                    throw "Configuration file path is required."
+                }
+
+                if ($null -eq $DSCCompositeResourcePath) {
+                    throw "Composite resource path is required."
+                }
+
+                $result = Load-Mock
+                $this.parameters = $result.parameters
+                $this.variables = $result.variables
+                $this.resources = $result.resources
+
+            }
+        }
+
         $references = @{}
         $variables = @{}
         $parameters = @{}
 
         Mock -CommandName Write-Host
-
-        Mock -CommandName ConvertFrom-Yaml -MockWith {
-            param ($content)
-            return @{
-                parameters = @{
-                    param1 = "value1"
-                }
-                variables = @{
-                    var1 = "value1"
-                }
-                resources = @(
-                    @{
-                        type = "Module/Resource"
-                        name = "Resource1"
-                        properties = @{
-                            prop1 = "value1"
-                        }
-                    }
-                )
-            }
-        }
-    
-        Mock -CommandName ConvertFrom-Json -MockWith {
-            param ($content)
-            return @{
-                parameters = @{
-                    param1 = "value1"
-                }
-                variables = @{
-                    var1 = "value1"
-                }
-                resources = @(
-                    @{
-                        type = "Module/Resource"
-                        name = "Resource1"
-                        properties = @{
-                            prop1 = "value1"
-                        }
-                    }
-                )
-            }
-        }
     
         Mock -CommandName Invoke-DscResource -MockWith {
             param ($Name, $ModuleName, $Method, $Property)
@@ -117,6 +115,8 @@ Describe "Start-LCM Function Tests" -Tag Unit {
 
         Mock -CommandName Export-Csv
 
+        Mock -CommandName Write-Verbose
+
     }
 
     BeforeEach {
@@ -126,27 +126,21 @@ Describe "Start-LCM Function Tests" -Tag Unit {
 
     Context "when processing configuration files" {
 
-        It "should correctly load YAML configuration" {
-            Mock -CommandName Get-Content -MockWith { "---\nparameters: {}\nvariables: {}\nresources: []" }
-            Start-LCM -FilePath "test.yaml"
-            Assert-MockCalled -CommandName ConvertFrom-Yaml -Exactly 1
+        It 'should correctly load configuration file' {
+            Mock -CommandName Invoke-CustomTask -MockWith { throw "mock error"}
+            { Start-LCM -FilePath "test.json" -DSCCompositeResourcePath "C:\CompositeResource" } | Should -Throw "mock error"
         }
 
-        It "should correctly load JSON configuration" {
-            Mock -CommandName Get-Content -MockWith { '{"parameters": {}, "variables": {}, "resources": []}' }
-            Start-LCM -FilePath "test.json"
-            Assert-MockCalled -CommandName ConvertFrom-Json -Exactly 1
-        }
-
-        It "should throw error for unsupported file extension" {
-            { Start-LCM -FilePath "test.txt" } | Should -Throw
-        }
     }
 
     Context "when operating in different modes" {
 
-        BeforeAll {
-            Mock -CommandName Get-Content -MockWith { '{"parameters": {}, "variables": {}, "resources": []}' }
+        BeforeEach {
+            $Script:TestDSCResourceCounter = 0
+        }
+
+        AfterEach {
+            $references.Clear()
         }
 
         It "should operate in 'Test' mode by default" {
@@ -154,25 +148,63 @@ Describe "Start-LCM Function Tests" -Tag Unit {
                 [PSCustomObject]@{ InDesiredState = $true; Message = "Tested successfully." }
             }
 
-            Start-LCM -FilePath "test.json"
+            Start-LCM -FilePath "test.json" -DSCCompositeResourcePath "mock-path"
 
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Test" } -Exactly 1
         }
 
         It "should apply changes in 'Set' mode" {
+
+            Mock -CommandName Invoke-DscResource -MockWith {
+                if ($Script:TestDSCResourceCounter -eq 0) {
+                    [PSCustomObject]@{ InDesiredState = $false; Message = "Resource set to desired state." }
+                    $Script:TestDSCResourceCounter++
+                } else {
+                    [PSCustomObject]@{ InDesiredState = $true; Message = "Resource set to desired state." }
+                }
+            } -ParameterFilter { $Method -eq "Test" }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Set" }
+
+            Start-LCM -FilePath "test.json" -Mode "Set" -DSCCompositeResourcePath "mock-path"
+
+            Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Test" } -Exactly 2
+            Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Set" } -Exactly 1
+            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "*Resource set to desired state:*" } -Exactly 1
+            
+        }
+
+        It "should fail if a resource throws an error attempting to apply changes in 'Set' mode" {
+            Mock -CommandName Write-Error
             Mock -CommandName Invoke-DscResource -MockWith {
                 [PSCustomObject]@{ InDesiredState = $false; Message = "Not in desired state." }
+            } -ParameterFilter { $Method -eq "Test" }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Set" } -MockWith {
+                throw "mock error"
             }
 
-            Start-LCM -FilePath "test.json" -Mode "Set"
+            { Start-LCM -FilePath "test.json" -Mode "Set" -DSCCompositeResourcePath "mock-path" } | Should -Not -Throw
+            Assert-MockCalled -CommandName Write-Error -Times 1
 
-            Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Test" } -Exactly 1
+        }
+
+        It "should fail if the resource was set however the subsequent test fails" {
+
+            Mock -CommandName Invoke-DscResource -MockWith {
+                [PSCustomObject]@{ InDesiredState = $false; Message = "Not in desired state." }
+            } -ParameterFilter { $Method -eq "Test" }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Set" }
+
+            Start-LCM -FilePath "test.json" -Mode "Set" -DSCCompositeResourcePath "mock-path"
+
+            Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Test" } -Exactly 2
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Set" } -Exactly 1
+            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "*Failed to set resource to desired state:*" } -Exactly 1
+            
         }
 
         It "should skip tasks when StopTaskProcessing is true" {
 
-            Mock -CommandName ConvertFrom-Json -MockWith {
+            Mock -CommandName Load-Mock -MockWith {
                 param ($content)
                 return @{
                     parameters = @{
@@ -201,7 +233,7 @@ Describe "Start-LCM Function Tests" -Tag Unit {
                 }
             }
 
-            Start-LCM -FilePath "test.json"
+            Start-LCM -FilePath "test.json" -DSCCompositeResourcePath "mock-path"
 
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Test" } -Exactly 1
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Get" } -Exactly 1
@@ -211,7 +243,7 @@ Describe "Start-LCM Function Tests" -Tag Unit {
 
         It "should skip resources if the condition is met" {
                 
-            Mock -CommandName ConvertFrom-Json -MockWith {
+            Mock -CommandName Load-Mock -MockWith {
                 param ($content)
                 return @{
                     parameters = @{
@@ -241,12 +273,12 @@ Describe "Start-LCM Function Tests" -Tag Unit {
                 }
             }
 
-            Start-LCM -FilePath "test.json"
+            Start-LCM -FilePath "test.json" -DSCCompositeResourcePath "mock-path"
 
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Property.prop1 -eq "value1" } -Exactly 0
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Property.prop2 -eq "value2" } -Exactly 2
 
-        }        
+        }       
 
     }
 
@@ -254,6 +286,7 @@ Describe "Start-LCM Function Tests" -Tag Unit {
 
         BeforeAll {
             Mock -CommandName Get-Content -MockWith { '{"parameters": {}, "variables": {}, "resources": []}' }
+            $references.Clear()
         }
 
         AfterAll {
@@ -267,15 +300,14 @@ Describe "Start-LCM Function Tests" -Tag Unit {
         It "should generate a report if ReportPath is specified" {
             Mock -CommandName Export-Csv -MockWith {}
 
-            Start-LCM -FilePath "test.json" -ReportPath "C:\Reports"
-
+            Start-LCM -FilePath "test.json" -ReportPath "C:\Reports" -DSCCompositeResourcePath "mock-path" 
             Assert-MockCalled -CommandName Export-Csv -Exactly 1
         }
 
         It "should not generate a report if ReportPath is not specified" {
             Mock -CommandName Export-Csv -MockWith {}
 
-            Start-LCM -FilePath "test.json"
+            Start-LCM -FilePath "test.json" -DSCCompositeResourcePath "mock-path"
 
             Assert-MockCalled -CommandName Export-Csv -Exactly 0
         }
@@ -283,12 +315,8 @@ Describe "Start-LCM Function Tests" -Tag Unit {
 
     Context "error handling and edge cases" {
 
-        It "should handle missing FilePath parameter" {
-            { Start-LCM -Mode "Test" } | Should -Throw
-        }
-
         It "should handle invalid Mode parameter" {
-            { Start-LCM -FilePath "test.json" -Mode "Invalid" } | Should -Throw
+            { Start-LCM -FilePath "test.json" -Mode "Invalid" -DSCCompositeResourcePath "mock-path" } | Should -Throw
         }
 
         It "should print a non-terminating error when the LCM fails to set a resource" {
@@ -304,7 +332,7 @@ Describe "Start-LCM Function Tests" -Tag Unit {
             } -Verifiable
             Mock -CommandName Get-Content -MockWith { "---\nparameters: {}\nvariables: {}\nresources: []" }
 
-            { Start-LCM -FilePath "test.json" -Mode "Set" } | Should -Not -Throw
+            { Start-LCM -FilePath "test.json" -Mode "Set" -DSCCompositeResourcePath "mock-path" } | Should -Not -Throw
             Should -InvokeVerifiable
 
         }

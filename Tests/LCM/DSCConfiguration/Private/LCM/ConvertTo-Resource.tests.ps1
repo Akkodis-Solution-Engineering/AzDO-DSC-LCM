@@ -5,8 +5,6 @@ Describe "ConvertTo-Resource" -Tag Unit, LCM, Configuration {
         # Load the functions to test
         $preParseFilePath = (Get-FunctionPath 'ConvertTo-Resource.ps1').FullName
 
-        $DSCEnumDSCResourceType = (Get-FunctionPath 'DSCResourceType.ps1').FullName
-
         $DSCBaseResource = (Get-FunctionPath '001.DSCBaseResource.ps1').FullName
         $DSC_Resource = (Get-FunctionPath '002.DSC_Resource.ps1').FullName
         $DSCStub = (Get-FunctionPath '003.DSCStub.ps1').FullName
@@ -18,14 +16,14 @@ Describe "ConvertTo-Resource" -Tag Unit, LCM, Configuration {
             }
         }
 
-        . $DSCEnumDSCResourceType
-
         . $DSCBaseResource
         . $DSC_Resource
         . $DSCStub
         . $DSCCompositeResource
 
         . $preParseFilePath
+
+        Mock Get-Content -MockWith { return "Mock" }
 
     }
 

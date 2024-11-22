@@ -1,5 +1,5 @@
 
-Describe "ConvertTo-Resource" -Tag Unit, LCM, Configuration {
+Describe "ConvertTo-Resource" -Tag Unit, LCM, MockedClass {
 
     BeforeAll {
         # Load the functions to test

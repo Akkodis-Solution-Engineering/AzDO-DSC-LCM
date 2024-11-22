@@ -1,4 +1,4 @@
-Describe "Start-LCM Function Tests" -Tag Unit {
+Describe "Start-LCM Function Tests" -Tag Unit, MockedClass {
 
     BeforeAll {
 

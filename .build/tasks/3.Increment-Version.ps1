@@ -4,13 +4,13 @@ task Increment_Version {
 
     $latestVersion = & git tag | Where-Object { $_ -match "\d+\.\d+\.\d+" } | Sort-Object -Descending | Select-Object -First 1
     if ([String]::IsNullOrEmpty($latestVersion)) {
-        $latestVersion = "0.0.0"
+        $latestVersion = "0.0.1"
     }
 
     # Increment the patch version
     $versionParts = $latestVersion -split "\."
     $patchVersion = $versionParts[2]
-    $patchVersion = [int]$patchVersion + 1
+    $patchVersion = [int]$patchVersion
     $newVersion = "$($versionParts[0]).$($versionParts[1]).$patchVersion"
 
     Write-Host "Incrementing version from $latestVersion to $newVersion"

@@ -53,10 +53,6 @@ Describe "DSCCompositeResource Class Tests" {
             # Create a mock composite resource file
             New-Item -ItemType File -Path $linkedFileName | Out-Null
 
-            write-host $task
-            write-host $testDirectory
-            write-host $DSCConfigurationFile
-
             $compositeResource = [DSCCompositeResource]::new($resourceName, $testDirectory, $task)
 
             $compositeResource.name | Should -Be $task.name

@@ -5,6 +5,8 @@ $TestHelper = Import-Module -Name ".\Tests\TestHelpers\CommonTestFunctions.psm1"
 Remove-Variable -Name RepositoryRoot -Scope Global -ErrorAction SilentlyContinue
 Remove-Variable -Name TestPaths -Scope Global -ErrorAction SilentlyContinue
 
+Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)"
+
 $config = New-PesterConfiguration
 
 $config.Run.Path = ".\Tests\LCM"

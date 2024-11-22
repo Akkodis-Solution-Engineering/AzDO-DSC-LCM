@@ -7,22 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Initial LCM Base Logic.
-- Enhanced Error Handling:
-  - Improved logging for better traceability.
-  - Added custom error messages for common issues.
-- New Features:
-  - Added support for additional authentication methods.
-- Bug Fixes:
-  - Resolved issue with incorrect variable interpolation.
-  - Fixed bug in `Test-CircularReferences.ps1` causing false positives.
-- Updated Documentation:
-  - Added detailed setup and configuration instructions.
-  - Included troubleshooting section for common problems.
-- Continuous Integration:
-  - Configured automated tests to run on each commit.
-  - Integrated code quality checks into the CI pipeline.
+- Stub/Partial Configuration: Enables merging of properties within the LCM at an elevated level for enhanced flexibility.
+- Composite Resources: Introduces parameterization in LCM, allowing for the reuse of configuration templates.
 
 ### Changed
 
+- LCM will perform an additional 'Test' after 'Set' to validate that setting has been applied correctly.
+
 ### Fixed
+
+- Issues with Build script running on 'ubuntu-latest'. Issues with pwsh core handling classes.
+- Fixed Bugs within the Symantec Versioning script. Wasn't detecting tag versions.

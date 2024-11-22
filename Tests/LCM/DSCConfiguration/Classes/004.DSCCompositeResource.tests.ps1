@@ -55,7 +55,7 @@ Describe "DSCCompositeResource Class Tests" {
 
             write-host $task
             write-host $testDirectory
-            write-host $resourceName
+            write-host $DSCConfigurationFile
 
             $compositeResource = [DSCCompositeResource]::new($resourceName, $testDirectory, $task)
 

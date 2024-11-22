@@ -27,7 +27,7 @@ class DSCCompositeResource : DSCBaseResource {
 
         }
 
-        write-host "DSCCompositeResource: ERE"
+        write-host "DSCCompositeResource: ERE $($this.linkedFileName)"
         # Load the Configuration File as a Composite Resource
         $this.resource = [DSCConfigurationFile]::New($this.linkedFileName)
 

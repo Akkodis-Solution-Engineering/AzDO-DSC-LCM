@@ -25,7 +25,7 @@ Describe "sortDictionary Function Tests" -Tag Unit, LCM, Configuration {
             'a' = 2
             'm' = 3
         }
-        $expected = @{
+        $expected = [ordered]@{
             'a' = 2
             'm' = 3
             'z' = 1
@@ -76,7 +76,7 @@ Describe "sortDictionary Function Tests" -Tag Unit, LCM, Configuration {
     }
 
     It "Should return the same hashtable when keys are already ordered" {
-        $input = @{
+        $ht = @{
             'a' = 1
             'b' = 2
             'c' = 3
@@ -87,7 +87,7 @@ Describe "sortDictionary Function Tests" -Tag Unit, LCM, Configuration {
             'c' = 3
         }
 
-        $result = sortDictionary -HashTable $input
+        $result = sortDictionary -HashTable $ht
 
         @($result.Keys) | Should -Be @($expected.Keys)
         $result.a | Should -Be $expected.a

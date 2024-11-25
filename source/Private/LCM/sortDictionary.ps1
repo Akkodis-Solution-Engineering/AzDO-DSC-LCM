@@ -11,7 +11,7 @@ Function Sort-Hashtable {
         return @{}
     }
 
-    $OrderedHashTable = @{}
+    $OrderedHashTable = [Ordered]@{}
     foreach ($key in ($HashTable.Keys | Sort-Object)) {
         # If the value is a hashtable, recurse
         if ($HashTable[$key] -is [hashtable]) {

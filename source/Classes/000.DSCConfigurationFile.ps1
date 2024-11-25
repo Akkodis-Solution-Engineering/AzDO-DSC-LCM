@@ -91,7 +91,7 @@ class DSCConfigurationFile {
 
         # Parse the Resources
         if ($null -ne $pipeline.resources) {
-            $this.resources = ConvertTo-Resource -task $pipeline.resources -compositeResourcePath $this.compositeResourcePath
+            $this.resources = $pipeline.resources | ConvertTo-Resource -compositeResourcePath $this.compositeResourcePath
         }
         
         # Parse the Parameters

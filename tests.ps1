@@ -16,6 +16,9 @@ $config.CodeCoverage.Path = @( ".\source\Private", ".\source\Public", ".\LCM Rul
 $config.CodeCoverage.OutputFormat = 'CoverageGutters'
 $config.CodeCoverage.OutputPath = ".\output\testResults\codeCoverage.xml"
 $config.CodeCoverage.OutputEncoding = 'utf8'
+$config.Filter = @{
+    ExcludeTag = 'Skip', 'Integration'
+}
 
 # Get the path to the function being tested
 

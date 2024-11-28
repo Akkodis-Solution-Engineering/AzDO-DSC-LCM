@@ -40,5 +40,5 @@ jobs:
       # Run intergration tests
       - name: Run intergration tests
         shell: pwsh
-        run: . .\tests.ps1 -type Intergration
+        run: . .\tests.ps1 -type Integration
           

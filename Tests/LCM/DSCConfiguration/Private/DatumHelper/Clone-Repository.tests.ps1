@@ -1,5 +1,5 @@
 
-Describe 'Clone-Repository Function Tests' {
+Describe 'Clone-Repository Function Tests' -Tag Unit {
 
     BeforeAll {
 

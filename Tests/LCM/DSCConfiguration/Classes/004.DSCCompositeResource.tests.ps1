@@ -1,5 +1,5 @@
 
-Describe "DSCCompositeResource Class Tests" {
+Describe "DSCCompositeResource Class Tests" -Tag Unit {
     
     BeforeAll {
         

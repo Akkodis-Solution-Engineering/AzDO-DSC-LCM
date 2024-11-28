@@ -1,5 +1,5 @@
 
-Describe "Invoke-AZDoLCM Intergration Tests" -Tag Intergration, Invoke-AZDoLCM {
+Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
 
     BeforeAll {
         # Perform the latest build. This will ensure that the latest version of the module is loaded.

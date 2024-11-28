@@ -1,5 +1,5 @@
 
-Describe "Invoke-AZDoLCM Function Tests" {
+Describe "Invoke-AZDoLCM Function Tests" -Tag Unit {
 
     BeforeAll {
 

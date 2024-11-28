@@ -1,4 +1,4 @@
-Describe 'DatumConfigurationScriptBlock Function Tests' {
+Describe 'DatumConfigurationScriptBlock Function Tests' -Tag Unit {
 
     BeforeAll {
 

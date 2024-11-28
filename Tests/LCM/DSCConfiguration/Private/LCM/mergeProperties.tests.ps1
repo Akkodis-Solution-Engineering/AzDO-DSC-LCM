@@ -1,5 +1,5 @@
 
-Describe "Join-Properties Function Tests" {
+Describe "Join-Properties Function Tests" -Tag Unit {
 
     BeforeAll {
         # Load the functions to test

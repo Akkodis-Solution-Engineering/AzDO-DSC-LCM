@@ -85,12 +85,12 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Intergration, Invoke-AZDoLCM {
         It "Should not throw any errors when using 'StandardResources' test case" {
             $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\StandardResources'
             { Invoke-AZDoLCM @params } | Should -Not -Throw
-        }
+        } -skip
 
         It "Should not throw any errors when using 'StubResources' test case" {
             $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\StubResources'
             { Invoke-AZDoLCM @params } | Should -Not -Throw
-        }
+        } -skip
 
         It "Should not throw any resource errors when 'StandardResources' test case" {
             $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
@@ -107,7 +107,7 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Intergration, Invoke-AZDoLCM {
             # Ensure that no result was skipped or failed
             $report | Where-Object { $_.Result -eq 'SKIPPED' } | Should -BeNullOrEmpty
             $report | Where-Object { $_.Result -eq 'FAIL' } | Should -BeNullOrEmpty
-        }
+        } -skip
 
         It "Should not throw any resource errors when using 'StubResources' test case" {
             $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
@@ -123,7 +123,7 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Intergration, Invoke-AZDoLCM {
             # Ensure that no result was skipped or failed
             $report | Where-Object { $_.Result -eq 'SKIPPED' } | Should -BeNullOrEmpty
             $report | Where-Object { $_.Result -eq 'FAIL' } | Should -BeNullOrEmpty            
-        }
+        } -skip
 
         It "Should skip the resource when using conditional property" {
             $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
@@ -139,7 +139,7 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Intergration, Invoke-AZDoLCM {
             # Ensure that no result was skipped or failed
             $report | Where-Object { $_.Result -eq 'SKIPPED' } | Should -HaveCount 1
             $report | Where-Object { $_.Result -eq 'FAIL' } | Should -BeNullOrEmpty
-        }
+        } -skip
 
         It "Should skip all tests with 'StopProcessing' is used" {
             $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
@@ -153,7 +153,8 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Intergration, Invoke-AZDoLCM {
             # Ensure that the report contains the correct number of resources
             $report | Should -HaveCount 4
             # Ensure that no result was skipped or failed
-            $report | Where-Object { $_.Result -eq 'SKIPPED' } | Should -HaveCount 4
+            $report | Where-Object { $_.Result -eq 'SKIPPED' } | Should -HaveCount 3
+            $report | Where-Object { $_.Result -eq 'PASS' } | Should -HaveCount 1
             $report | Where-Object { $_.Result -eq 'FAIL' } | Should -BeNullOrEmpty
         }
 

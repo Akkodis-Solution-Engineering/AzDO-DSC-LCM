@@ -8,6 +8,30 @@ Describe "Sort-DependsOn" -Tag Unit, LCM, Rules, Sort {
 
     }
 
+    It "Should handle empty strings" {
+        $resources = @(
+            [PSCustomObject]@{ Type = ''; Name = ''; DependsOn = @() }
+        )
+        
+        $sortedResources = . $preParseFilePath -PipelineResources $resources
+        
+        # Assert that the order remains unchanged since there are no dependencies
+        $sortedResources.Count | Should -Be 1
+        $sortedResources.Name | Should -Be ''
+    }
+
+    It "Should handle when dependsOn is an empty string" {
+        $resources = @(
+            [PSCustomObject]@{ Type = 'Task'; Name = 'Task1'; DependsOn = '' }
+        )
+        
+        $sortedResources = . $preParseFilePath -PipelineResources $resources
+        
+        # Assert that the order remains unchanged since there are no dependencies
+        $sortedResources.Count | Should -Be 1
+        $sortedResources.Name | Should -Be 'Task1'
+    }
+
     It "should handle resources with no dependencies" {
         $resources = @(
             [PSCustomObject]@{ Type = 'Task'; Name = 'Task1'; DependsOn = $null },

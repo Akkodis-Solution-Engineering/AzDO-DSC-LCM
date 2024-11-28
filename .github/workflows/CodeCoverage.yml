@@ -36,4 +36,9 @@ jobs:
       - name: Run tests.ps1 - Perform Code Coverage
         shell: pwsh
         run: . .\tests.ps1
+
+      # Run intergration tests
+      - name: Run intergration tests
+        shell: pwsh
+        run: . .\tests.ps1 -type Intergration
           

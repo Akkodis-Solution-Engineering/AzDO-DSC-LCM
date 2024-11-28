@@ -10,6 +10,7 @@ resources:
 
   - name: Project
     type: AzureDevOpsDsc/AzDoProject
+    postExecutionScript: Stop-TaskProcessing
     properties:
       projectName: $ProjectName
       projectDescription: $ProjectDescription

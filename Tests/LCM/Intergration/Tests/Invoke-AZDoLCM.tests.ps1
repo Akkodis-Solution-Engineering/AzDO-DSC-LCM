@@ -65,6 +65,23 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Intergration, Invoke-AZDoLCM {
 
     Context "When running Invoke-AZDoLCM with a valid configuration" {
 
+        BeforeAll {
+            Import-Module 'azdo-dsc-lcm'
+        }
+
+        BeforeEach {
+            # Reset the parameters
+            $references = @{}
+            $variables = @{}
+            $parameters = @{}
+
+            Mock -CommandName Write-Host
+            Mock -CommandName Write-Error
+            Mock -CommandName Write-Verbose
+            Mock -CommandName Write-Warning
+
+        }
+
         It "Should not throw any errors when using 'StandardResources' test case" {
             $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\StandardResources'
             { Invoke-AZDoLCM @params } | Should -Not -Throw
@@ -78,7 +95,7 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Intergration, Invoke-AZDoLCM {
         It "Should not throw any resource errors when 'StandardResources' test case" {
             $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
             $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\StandardResources'
-            $temp = Invoke-AzDOLCM @params
+
             { Invoke-AZDoLCM @params } | Should -Not -Throw
 
             # Load the reports
@@ -106,6 +123,38 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Intergration, Invoke-AZDoLCM {
             # Ensure that no result was skipped or failed
             $report | Where-Object { $_.Result -eq 'SKIPPED' } | Should -BeNullOrEmpty
             $report | Where-Object { $_.Result -eq 'FAIL' } | Should -BeNullOrEmpty            
+        }
+
+        It "Should skip the resource when using conditional property" {
+            $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
+            $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\ConditionalProperty'
+            { Invoke-AZDoLCM @params } | Should -Not -Throw
+
+            # Load the reports
+            $reports = Get-ChildItem -Path $params.ReportPath -Recurse -File
+            $report = Import-CSV -Path $reports[0].FullName
+
+            # Ensure that the report contains the correct number of resources
+            $report | Should -HaveCount 4
+            # Ensure that no result was skipped or failed
+            $report | Where-Object { $_.Result -eq 'SKIPPED' } | Should -HaveCount 1
+            $report | Where-Object { $_.Result -eq 'FAIL' } | Should -BeNullOrEmpty
+        }
+
+        It "Should skip all tests with 'StopProcessing' is used" {
+            $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
+            $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\StopProcessing'
+            { Invoke-AZDoLCM @params } | Should -Not -Throw
+
+            # Load the reports
+            $reports = Get-ChildItem -Path $params.ReportPath -Recurse -File
+            $report = Import-CSV -Path $reports[0].FullName
+
+            # Ensure that the report contains the correct number of resources
+            $report | Should -HaveCount 4
+            # Ensure that no result was skipped or failed
+            $report | Where-Object { $_.Result -eq 'SKIPPED' } | Should -HaveCount 4
+            $report | Where-Object { $_.Result -eq 'FAIL' } | Should -BeNullOrEmpty
         }
 
     }

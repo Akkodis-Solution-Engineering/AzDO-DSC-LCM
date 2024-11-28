@@ -59,14 +59,14 @@ function Start-LCM {
     Write-Host "--> Sorting tasks based on dependencies:" -ForegroundColor Green
 
     # Sort the tasks based on their dependencies to ensure correct execution order
-    $tasks = Invoke-CustomTask -Tasks $pipeline.resources -CustomTaskName "Sort-DependsOn"
+    $tasks = Invoke-CustomTask -Tasks $Tasks -CustomTaskName "Sort-DependsOn"
     Write-Verbose "Sorted tasks based on dependencies"
 
     # Invoke the PreParse the rules to process the tasks before formatting them
     Write-Host "--> Processing PreParse Rules:" -ForegroundColor Green
 
     # Invoke the PreParse the rules to process the tasks before formatting them 
-    Invoke-PreParseRules -Tasks $pipeline.resources
+    Invoke-PreParseRules -Tasks $Tasks
     
     # Invoke the Format Tasks Rules
     Write-Host "--> Processing Formatting Tasks:" -ForegroundColor Green

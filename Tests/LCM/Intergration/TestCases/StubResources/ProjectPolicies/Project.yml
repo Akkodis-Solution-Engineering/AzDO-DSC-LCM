@@ -10,7 +10,6 @@ resources:
 
   - name: Project
     type: AzureDevOpsDsc/AzDoProject
-    postExecutionScript: if ($Project_Ensure -eq 'Absent') { Stop-TaskProcessing }
     properties:
       projectName: $ProjectName
       projectDescription: $ProjectDescription

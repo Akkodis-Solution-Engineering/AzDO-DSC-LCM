@@ -1,23 +1,17 @@
-# Import the module containing Merge-StubResources if it's in a separate file.
-# . "$PSScriptRoot\Path\To\YourModule.psm1"
 
 Describe "Merge-StubResources" -Tag Unit, LCM, Rules, Sort {
 
     BeforeAll {
 
-        $DSCEnumDSCResourceType = (Get-FunctionPath 'DSCResourceType.ps1').FullName
-
-        $DSCConfigurationFile = (Get-FunctionPath '000.DSCConfigurationFile.ps1').FullName
-        $DSCBaseResource = (Get-FunctionPath '001.DSCBaseResource.ps1').FullName
-        $DSC_Resource = (Get-FunctionPath '002.DSC_Resource.ps1').FullName
-        $DSCStub = (Get-FunctionPath '003.DSCStub.ps1').FullName
-        $DSCCompositeResource = (Get-FunctionPath '004.DSCCompositeResource.ps1').FullName
+        $DSCConfigurationFile   = (Get-FunctionPath '000.DSCConfigurationFile.ps1').FullName
+        $DSCBaseResource        = (Get-FunctionPath '001.DSCBaseResource.ps1').FullName
+        $DSC_Resource           = (Get-FunctionPath '002.DSC_Resource.ps1').FullName
+        $DSCStub                = (Get-FunctionPath '003.DSCStub.ps1').FullName
+        $DSCCompositeResource   = (Get-FunctionPath '004.DSCCompositeResource.ps1').FullName
 
         # Load the functions to test
-        $preParseFilePath = (Get-FunctionPath 'Merge-StubResources.ps1').FullName
+        $preParseFilePath       = (Get-FunctionPath 'Merge-StubResources.ps1').FullName
         $joinPropertiesFilePath = (Get-FunctionPath 'mergeProperties.ps1').FullName
-
-        . $DSCEnumDSCResourceType
 
         . $DSCConfigurationFile
         . $DSCBaseResource
@@ -30,6 +24,7 @@ Describe "Merge-StubResources" -Tag Unit, LCM, Rules, Sort {
         $DSCStub = [DSCStub]::New(@{ 
             name = 'ResourceA'
             merge_with = 'TargetResource'
+            type = 'DSCStub'
             properties = @{ Key1 = 'Value1' }
         })
         $TargetResource = @{ Name = 'TargetResource'; properties = @{ Key2 = 'ExistingValue' } }
@@ -78,6 +73,7 @@ Describe "Merge-StubResources" -Tag Unit, LCM, Rules, Sort {
         $DSCStub = [DSCStub]::New(@{ 
             name = 'ResourceA'
             merge_with = 'NonExistentResource'
+            type = 'DSCStub'
             properties = @{ Key1 = 'Value1' }
         })
         $pipelineResources = @($DSCStub, $TargetResource)
@@ -94,6 +90,7 @@ Describe "Merge-StubResources" -Tag Unit, LCM, Rules, Sort {
             name = 'ResourceB'
             merge_with = 'TargetResource'
             properties = @{ Key3 = 'Value3' }
+            type = 'DSCStub'
         })
         $pipelineResources = @($DSCStub, $DSCStub2, $TargetResource)
 
@@ -103,8 +100,8 @@ Describe "Merge-StubResources" -Tag Unit, LCM, Rules, Sort {
         $result.properties['Key1'] | Should -Be 'Value1'
         $result.properties['Key2'] | Should -Be 'ExistingValue'
         $result.properties['Key3'] | Should -Be 'Value3'
-    }
-
+    } 
+ 
     It "Merges complex properties correctly" {
 
         $resources = @(
@@ -113,16 +110,19 @@ Describe "Merge-StubResources" -Tag Unit, LCM, Rules, Sort {
                 name = 'ResourceA'
                 merge_with = 'TargetResource'
                 properties = @{ Key1 = 'Value1'; Key2 = @{ SubKey1 = 'SubValue1' } }
+                type = 'DSCStub'
             })
             [DSCStub]::New(@{
                 name = 'ResourceB'
                 merge_with = 'ResourceC'
                 properties = @{ Key1 = 'Value1'; Key2 = @{ SubKey2 = 'SubValue2' } }
+                type = 'DSCStub'                
             })
             [DSCStub]::New(@{
                 name = 'ResourceB'
                 merge_with = 'ResourceD'
                 properties = @{ Key1 = 'Value1'; Key2 = @{ SubKey2 = 'SubValue2' } }
+                type = 'DSCStub'                
             })            
             @{
                 Name = 'TargetResource'

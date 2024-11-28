@@ -36,7 +36,7 @@ Describe "DSCBaseResource Class Tests" -Tag Unit {
             $resource.type = 'TypeA'
 
             $fullResourceName = $resource.getFullResourceName()
-            $fullResourceName | Should -Be "TypeA\MyResource"
+            $fullResourceName | Should -Be "TypeA/MyResource"
         }
 
         It "Should handle null name gracefully" {

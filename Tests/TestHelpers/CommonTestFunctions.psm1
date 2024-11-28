@@ -70,6 +70,76 @@ Function Get-FunctionPath {
 
 }
 
+Function Get-ModulePath {
+
+    # Locate the scriptroot for the module
+    if ($Global:RepositoryRoot -eq $null) {
+        $Global:RepositoryRoot = Split-RecurivePath $PSScriptRoot -Times 2
+    }
+
+    $SourcesDirectory = Join-Path $Global:RepositoryRoot 'source'
+    $ClassesDirectory = Join-Path $SourcesDirectory 'Classes'
+    $PublicFunctionsDirectory = Join-Path $SourcesDirectory 'Public'
+    $PrivateFunctionsDirectory = Join-Path $SourcesDirectory 'Private'
+
+    return @{
+        SourcesDirectory = $SourcesDirectory
+        ClassesDirectory = $ClassesDirectory
+        PublicFunctionsDirectory = $PublicFunctionsDirectory
+        PrivateFunctionsDirectory = $PrivateFunctionsDirectory
+    }
+
+}
+
+Function Copy-TestCasesToTempDrive {
+
+    $param = @{
+        Path = Join-Path $Global:RepositoryRoot '\Tests\LCM\Intergration\TestCases'
+        Destination = $TestDrive
+        Recurse = $true
+        Force = $true
+    }
+
+    # Create the destination directory
+    New-Item -Path $param.Destination -ItemType Directory -Force
+    # Copy the test cases to the destination directory
+    Copy-Item @param
+
+}
+
+Function Install-Dependencies {
+    param (
+        [string]$ModuleName
+    )
+
+    # FOR WINDOWS ONLY
+    if ($IsWindows -eq $false) {
+        throw "This function is only supported on Windows"
+    }
+
+    # Resolve the path to the module directory
+    $MockModulePath = Join-Path $Global:RepositoryRoot '\Tests\LCM\Intergration\Resources\Modules\AzureDevOpsDsc'
+    $LCMModulePath = Join-Path $Global:RepositoryRoot '\output\azdo-dsc-lcm'
+
+    # Find the user's module directory
+    $ModuleDirectory = $env:PSModulePath.Split(';') | Where-Object { $_ -like "*$ENV:Username*" -and $_ -like "*documents*" }
+
+    # Install the Dependencies
+    Install-Module -Name 'PSDesiredStateConfiguration', 'Datum', 'Datum.InvokeCommand' -ErrorAction Stop -Scope CurrentUser
+
+    # Delete the module from the user's module directory
+    Remove-Item -Path (Join-Path $ModuleDirectory -ChildPath 'AzureDevOpsDsc') -Recurse -Force
+    Remove-Item -Path (Join-Path $ModuleDirectory -ChildPath 'azdo-dsc-lcm') -Recurse -Force
+
+    # Copy the module into the user's module directory
+    Copy-Item -Path $MockModulePath -Destination $ModuleDirectory -Force -Recurse
+    Copy-Item -Path $LCMModulePath -Destination $ModuleDirectory -Force -Recurse
+
+    # Import the MockDSCModule
+    Import-Module AzureDevOpsDsc -Version 0.0.1 -ErrorAction Stop
+
+}
+
 Function Find-Functions {
     param(
         [String]$TestFilePath
@@ -132,4 +202,4 @@ Function Import-Enums {
     return ($Global:TestPaths | Where-Object { $_.Directory.Name -eq 'Enum' })
 }
 
-Export-ModuleMember -Function Split-RecurivePath, Get-FunctionPath, Find-Functions, Get-ClassFilePath, Import-Enums, New-MockDirectoryPath, New-MockFilePath
+Export-ModuleMember -Function Split-RecurivePath, Get-FunctionPath, Find-Functions, Get-ClassFilePath, Import-Enums, New-MockDirectoryPath, New-MockFilePath, Install-Dependencies, Copy-TestCasesToTempDrive, Get-ModulePath

@@ -2,11 +2,7 @@
 # Lower values in the Datum Resolution Precedence list take precedence over higher values.
 ResolutionPrecedence:
   - Projects\$($Node.ProjectPresence)\$($Node.Project)
-  - ProjectPolicies\ProjectGitRepositories
-  - ProjectPolicies\ProjectGroups
   - ProjectPolicies\Project
-  - OrganizationPolicies\OrganizationGroups
-  - OrganizationPolicies\Organization
 
 # Datum Handlers are used to process Datum values.
 DatumHandlersThrowOnError: true

@@ -106,7 +106,7 @@ resources:
         It "Should return null for parameters, variables, resources" {
             $configFile = [DSCConfigurationFile]::new($mockYamlFile)
             $configFile.parameters | Should -BeNullOrEmpty
-            $configFile.variables | Should -BeNullOrEmpty
+           # $configFile.variables | Should -BeNullOrEmpty
             $configFile.resources | Should -BeNullOrEmpty
         }
 

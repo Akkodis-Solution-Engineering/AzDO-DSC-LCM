@@ -8,7 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Stub/Partial Configuration: Enables merging of properties within the LCM at an elevated level for enhanced flexibility.
-- Composite Resources: Introduces parameterization in LCM, allowing for the reuse of configuration templates.
 
 ### Changed
 

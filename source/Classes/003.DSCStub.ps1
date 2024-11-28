@@ -18,9 +18,9 @@ class DSCStub : DSCBaseResource {
 
         # Locate the resource index position
         $indexPos = 0 .. ($dscResources.count - 1) | Where-Object {
-            $dscResources[$_].getFullResourceName() -eq $this.merge_with
+            $dscResources[$_].getFullResourceName() -eq $this.merge_with.Replace("\", "/")
         }
-
+    
         # If the resource is missing, throw an error
         if (@($indexPos).count -eq 0) {
             throw "[DSCStub] Error: Resource '$($this.merge_with)' not found in provided DSC resources."

@@ -53,7 +53,7 @@ class DSCConfigurationFile {
 
     [HashTable]$parameters
     [HashTable]$variables
-    [HashTable[]]$resources
+    [Object[]]$resources
     hidden [string]$configurationFilePath
     hidden [bool]$isCompositeResource = $false
     [string]$configurationDirectory = $null
@@ -102,7 +102,8 @@ class DSCConfigurationFile {
 
         # Variables
         if ($null -ne $pipeline.variables) {
-            $this.variables = SetVariables -Source $pipeline.variables
+            SetVariables -Source $pipeline.variables
+            $this.variables = $pipeline.variables
         }
 
         

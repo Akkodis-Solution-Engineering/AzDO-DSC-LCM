@@ -48,6 +48,38 @@ Describe "DSCStub Class Tests" -Tag Unit {
     }
 
     Context "Merge Method Tests" {
+
+        It "Should merge even when the merge_with seperator is a backslash instead of a forwardslash" {
+            $ht = @{
+                name       = "StubResource"
+                properties = @{ key = "value" }
+                merge_with = "MockType\TargetResource"
+                type = "MockType"
+            }
+            $stub = [DSCStub]::new($ht)
+
+            $dscResources = @(
+                [DSC_Resource]::new(@{
+                    name       = "TargetResource"
+                    type       = 'MockType'
+                    properties = @{ key = "value" }
+                    mergable   = $true
+                })                
+            )
+
+            Mock Join-Properties { 
+                param (
+                    [HashTable]$source, 
+                    [HashTable]$merge
+                )
+                return $merge
+            }
+
+            $mergedResources = $stub.merge($dscResources)
+
+            $mergedResources[0].properties.key | Should -Be "value"
+        }
+
         It "Should throw error if merge_with resource not found" {
             $ht = @{
                 name       = "StubResource"
@@ -77,7 +109,7 @@ Describe "DSCStub Class Tests" -Tag Unit {
             $ht = @{
                 name       = "StubResource"
                 properties = @{ key = "value" }
-                merge_with = "MockType\DuplicateResource"
+                merge_with = "MockType/DuplicateResource"
                 type = "MockType"
             }
             $stub = [DSCStub]::new($ht)
@@ -102,7 +134,7 @@ Describe "DSCStub Class Tests" -Tag Unit {
             $ht = @{
                 name       = "StubResource"
                 properties = @{ key = "value" }
-                merge_with = "Type\NonMergeableResource"
+                merge_with = "Type/NonMergeableResource"
                 type = "MockType"
             }
             $stub = [DSCStub]::new($ht)
@@ -122,7 +154,7 @@ Describe "DSCStub Class Tests" -Tag Unit {
             $ht = @{
                 name       = "StubResource"
                 properties = @{ key = "newValue" }
-                merge_with = "MockType\MergeableResource"
+                merge_with = "MockType/MergeableResource"
                 type = "MockType"
             }
             $stub = [DSCStub]::new($ht)

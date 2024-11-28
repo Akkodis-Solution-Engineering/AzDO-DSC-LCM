@@ -10,7 +10,7 @@ class DSCBaseResource {
             throw "[DSCBaseResource] Resource name is not set"
         }
 
-        return "$($this.type)\$($this.name)"
+        return "$($this.type)/$($this.name)".Replace("\", "/")
     }
     
 }

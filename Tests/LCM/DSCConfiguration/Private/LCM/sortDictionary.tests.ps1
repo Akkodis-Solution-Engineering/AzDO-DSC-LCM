@@ -44,7 +44,7 @@ Describe "sortDictionary Function Tests" -Tag Unit, LCM, Configuration {
             }
         }
         $expected = @{
-            'outer' = @{
+            'outer' = [Ordered]@{
                 'a' = 2
                 'b' = 1
             }
@@ -64,8 +64,8 @@ Describe "sortDictionary Function Tests" -Tag Unit, LCM, Configuration {
         }
         $expected = @{
             'array' = @(
-                @{ 'a' = 1; 'c' = 3 }
-                @{ 'b' = 2; 'd' = 4 }
+                [Ordered]@{ 'a' = 1; 'c' = 3 }
+                [Ordered]@{ 'b' = 2; 'd' = 4 }
             )
         }
 
@@ -81,7 +81,7 @@ Describe "sortDictionary Function Tests" -Tag Unit, LCM, Configuration {
             'b' = 2
             'c' = 3
         }
-        $expected = @{
+        $expected = [Ordered]@{
             'a' = 1
             'b' = 2
             'c' = 3

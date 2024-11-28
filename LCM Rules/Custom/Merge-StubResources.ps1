@@ -58,7 +58,7 @@ ForEach ($GroupResource in $GroupResources) {
     # Merge the stub resource properties with resource properties.
     Write-Verbose "[Merge-StubResources] Merging properties of stub resources with target resource: $($Resource.Name)"
     $GroupResource.Group | ForEach-Object {
-        $Resource.properties = Join-Properties -source $Resource.properties -merge ([HashTable]$_.properties[0])
+        $Resource.properties = Join-Properties -source $Resource.properties -merge $_.properties
         Write-Verbose "[Merge-StubResources] Merged properties for resource: $($Resource.Name)"
     }
 }

@@ -93,6 +93,8 @@ Function Get-ModulePath {
 
 Function Copy-TestCasesToTempDrive {
 
+    Write-Host "[Copy-TestCasesToTempDrive] Copying Test Cases to Temp Drive"
+
     $param = @{
         Path = Join-Path $Global:RepositoryRoot '\Tests\LCM\Intergration\TestCases'
         Destination = $TestDrive
@@ -100,10 +102,14 @@ Function Copy-TestCasesToTempDrive {
         Force = $true
     }
 
+    Write-Host "[Copy-TestCasesToTempDrive] Copying Test Cases to Temp Drive - $($param.Path) to $($param.Destination)"
+
     # Create the destination directory
     New-Item -Path $param.Destination -ItemType Directory -Force
     # Copy the test cases to the destination directory
     Copy-Item @param
+
+    Write-Host "[Copy-TestCasesToTempDrive] Test Cases Copied"
 
 }
 
@@ -137,6 +143,8 @@ Function Install-Dependencies {
 
     # Import the MockDSCModule
     Import-Module AzureDevOpsDsc -Version 0.0.1 -ErrorAction Stop
+
+    Write-Host "[Install-Dependencies] Dependencies Installed"
 
 }
 

@@ -124,7 +124,8 @@ Function Install-Dependencies {
     }
 
     # Resolve the path to the module directory
-    $MockModulePath = Join-Path $Global:RepositoryRoot '\Tests\LCM\Intergration\Resources\Modules\AzureDevOpsDsc'
+    $MockDSCResourceModulePath = Join-Path $Global:RepositoryRoot '\Tests\LCM\Intergration\Resources\Modules\AzureDevOpsDsc'
+    $MockDSCSupportingResourceModulePath = Join-Path $Global:RepositoryRoot '\Tests\LCM\Intergration\Resources\Modules\AzureDevOpsDsc.Common'
     $LCMModulePath = Join-Path $Global:RepositoryRoot '\output\azdo-dsc-lcm'
 
     # Find the user's module directory
@@ -138,7 +139,8 @@ Function Install-Dependencies {
     Remove-Item -Path (Join-Path $ModuleDirectory -ChildPath 'azdo-dsc-lcm') -Recurse -Force -ErrorAction SilentlyContinue
 
     # Copy the module into the user's module directory
-    Copy-Item -Path $MockModulePath -Destination $ModuleDirectory -Force -Recurse
+    Copy-Item -Path $MockDSCResourceModulePath -Destination $ModuleDirectory -Force -Recurse
+    Copy-Item -Path $MockDSCSupportingResourceModulePath -Destination $ModuleDirectory -Force -Recurse
     Copy-Item -Path $LCMModulePath -Destination $ModuleDirectory -Force -Recurse
 
     # Import the MockDSCModule

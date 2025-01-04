@@ -128,8 +128,8 @@ Function Install-Dependencies {
     Install-Module -Name 'PSDesiredStateConfiguration', 'Datum', 'Datum.InvokeCommand' -ErrorAction Stop -Scope CurrentUser
 
     # Delete the module from the user's module directory
-    Remove-Item -Path (Join-Path $ModuleDirectory -ChildPath 'AzureDevOpsDsc') -Recurse -Force
-    Remove-Item -Path (Join-Path $ModuleDirectory -ChildPath 'azdo-dsc-lcm') -Recurse -Force
+    Remove-Item -Path (Join-Path $ModuleDirectory -ChildPath 'AzureDevOpsDsc') -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path (Join-Path $ModuleDirectory -ChildPath 'azdo-dsc-lcm') -Recurse -Force -ErrorAction SilentlyContinue
 
     # Copy the module into the user's module directory
     Copy-Item -Path $MockModulePath -Destination $ModuleDirectory -Force -Recurse

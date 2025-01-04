@@ -1,7 +1,12 @@
 # AzDO-DSC-LCM
 
-[![Development Branch Test Status](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/CodeCoverage.yml/badge.svg?branch=development)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/CodeCoverage.yml)
-[![Main Branch Test Statusvs](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/CodeCoverage.yml/badge.svg?branch=main)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/CodeCoverage.yml)
+[![Development Branch Code Coverage Status](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/Development.CodeCoverage.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/Development.CodeCoverage.yml)
+[![Development Intergration Test Status](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/Development.IntergrationTests.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/Development.IntergrationTests.yml)
+[![Main Branch Code Coverage Status](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/Main.CodeCoverage.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/Main.CodeCoverage.yml)
+[![Main Intergration Test Status](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/Main.IntergrationTests.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/Main.IntergrationTests.yml)
+[![Nightly Dev Build](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/nightly-dev-build.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/nightly-dev-build.yml)
+[![CodeQL Advanced](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/codeql.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/codeql.yml)
+[![Current Code Coverage Status](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/CodeCoverage.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/CodeCoverage.yml)
 
 ## Overview
 

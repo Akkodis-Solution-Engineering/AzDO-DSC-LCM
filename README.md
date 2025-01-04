@@ -1,6 +1,7 @@
 # AzDO-DSC-LCM
 
-[![Current Code Coverage Status](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/CodeCoverage.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/CodeCoverage.yml)
+[![Development Branch Test Status](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/CodeCoverage.yml/badge.svg?branch=development)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/CodeCoverage.yml)
+[![Main Branch Test Statusvs](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/CodeCoverage.yml/badge.svg?branch=main)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/CodeCoverage.yml)
 
 ## Overview
 

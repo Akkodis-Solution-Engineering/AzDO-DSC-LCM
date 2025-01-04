@@ -1,5 +1,5 @@
 
-Describe "Invoke-AZDoLCM Function Tests" {
+Describe "Invoke-AZDoLCM Function Tests" -Tag Unit {
 
     BeforeAll {
 
@@ -112,7 +112,7 @@ Describe "Invoke-AZDoLCM Function Tests" {
 
         it "should call Clone-Repository with a valid URL" {
             Mock -CommandName 'Clone-Repository' -Verifiable -MockWith {
-                return 'C:\mockPath'
+                return '\mockPath'
             }
             { Invoke-AZDoLCM -AzureDevopsOrganizationName "MyOrg" -exportConfigDir $exportConfigDir -JITToken "abc123" -Mode "test" -ConfigurationSourcePath "http://mockGitRepo.com/repo"} | Should -Not -Throw
             Should -InvokeVerifiable

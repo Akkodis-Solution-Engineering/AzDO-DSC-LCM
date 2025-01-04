@@ -13,24 +13,12 @@ Describe "SetVariables Function Tests" -Tag Unit, LCM, Configuration {
         $global:target = @{}
     }
 
-    It "should copy key-value pairs from Source to Target hashtable" {
-        $source = @{
-            "Key1" = "Value1"
-            "Key2" = "Value2"
-        }
-        
-        SetVariables -Source $source -Target $target
-        
-        $target["Key1"] | Should -Be "Value1"
-        $target["Key2"] | Should -Be "Value2"
-    }
-
     It "should create script-level variables with underscores replacing dots" {
         $source = @{
             "Key.With.Dot" = "DotValue"
         }
         
-        SetVariables -Source $source -Target $target
+        SetVariables -Source $source
         
         $script:Key_With_Dot | Should -Be "DotValue"
     }

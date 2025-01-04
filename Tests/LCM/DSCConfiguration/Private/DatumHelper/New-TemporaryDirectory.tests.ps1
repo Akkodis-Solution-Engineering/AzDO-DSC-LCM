@@ -1,5 +1,5 @@
 
-Describe 'New-TemporaryDirectory Function Tests' {
+Describe 'New-TemporaryDirectory Function Tests' -Tag Unit {
 
     BeforeAll {
 

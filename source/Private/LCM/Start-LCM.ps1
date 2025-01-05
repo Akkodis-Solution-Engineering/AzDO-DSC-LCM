@@ -41,7 +41,8 @@ function Start-LCM {
         [string] $Mode = "Test", # Default mode is 'Test', can be set to 'Set' for applying changes,
         [String] $ReportPath = $null, # Optional parameter for specifying a report path
         [Parameter(Mandatory = $true)]
-        [String] $DSCCompositeResourcePath
+        [String] $DSCCompositeResourcePath, # The path to the DSC Composite Resources
+        [String] $OutputObject = $null # The output object to store the results of the DSC Configuration
     )
 
     # Clear StopTaskProcessing variable

@@ -47,7 +47,13 @@ $GroupResources = $StubResources | Group-Object -Property merge_with
 ForEach ($GroupResource in $GroupResources) {
     # Find the resource that the stub resource is to be merged with
     Write-Verbose "[Merge-StubResources] Looking for resources to merge with: $($GroupResource.Name)"
-    $Resource = $Resources | Where-Object { $_.Name -eq $GroupResource.Name }
+    
+    # Split the 'MergeWith' property to get the target resource name and type
+    $split = $GroupResource.Group[0].merge_with -split '\/|\\'
+    $GroupResourceName = $split[-1]
+    $GroupResourceType = $split[0..($split.Length - 2)] -join '/'
+
+    $Resource = $Resources | Where-Object { $_.Name -eq $GroupResourceName -and $_.Type -eq $GroupResourceType }
 
     # If the resource is not found, write a warning and continue
     if ($null -eq $Resource) {

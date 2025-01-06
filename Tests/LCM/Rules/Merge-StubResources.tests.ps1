@@ -23,11 +23,16 @@ Describe "Merge-StubResources" -Tag Unit, LCM, Rules, Sort {
         # Define mock DSCStub and resource objects for testing
         $DSCStub = [DSCStub]::New(@{ 
             name = 'ResourceA'
-            merge_with = 'TargetResource'
+            merge_with = 'ResourceType/ResourceName/TargetResource'
             type = 'DSCStub'
             properties = @{ Key1 = 'Value1' }
         })
-        $TargetResource = @{ Name = 'TargetResource'; properties = @{ Key2 = 'ExistingValue' } }
+
+        $TargetResource = @{ 
+            Name = 'TargetResource';
+            Type = 'ResourceType/ResourceName';
+            Properties = @{ Key2 = 'ExistingValue' }
+        }
 
     }
 
@@ -72,7 +77,7 @@ Describe "Merge-StubResources" -Tag Unit, LCM, Rules, Sort {
 
         $DSCStub = [DSCStub]::New(@{ 
             name = 'ResourceA'
-            merge_with = 'NonExistentResource'
+            merge_with = 'ResourceType/ResourceName/NonExistentResource'
             type = 'DSCStub'
             properties = @{ Key1 = 'Value1' }
         })
@@ -88,7 +93,7 @@ Describe "Merge-StubResources" -Tag Unit, LCM, Rules, Sort {
     It "Merge multiple sub resources with the same target resource" {
         $DSCStub2 = [DSCStub]::New(@{ 
             name = 'ResourceB'
-            merge_with = 'TargetResource'
+            merge_with = 'ResourceType/ResourceName/TargetResource'
             properties = @{ Key3 = 'Value3' }
             type = 'DSCStub'
         })
@@ -108,36 +113,40 @@ Describe "Merge-StubResources" -Tag Unit, LCM, Rules, Sort {
 
             [DSCStub]::New(@{
                 name = 'ResourceA'
-                merge_with = 'TargetResource'
+                merge_with = 'ResourceType/ResourceName/TargetResource'
                 properties = @{ Key1 = 'Value1'; Key2 = @{ SubKey1 = 'SubValue1' } }
                 type = 'DSCStub'
             })
             [DSCStub]::New(@{
                 name = 'ResourceB'
-                merge_with = 'ResourceC'
+                merge_with = 'ResourceType/ResourceName/ResourceC'
                 properties = @{ Key1 = 'Value1'; Key2 = @{ SubKey2 = 'SubValue2' } }
                 type = 'DSCStub'                
             })
             [DSCStub]::New(@{
                 name = 'ResourceB'
-                merge_with = 'ResourceD'
+                merge_with = 'ResourceType/ResourceName/ResourceD'
                 properties = @{ Key1 = 'Value1'; Key2 = @{ SubKey2 = 'SubValue2' } }
                 type = 'DSCStub'                
             })            
             @{
                 Name = 'TargetResource'
+                Type = 'ResourceType/ResourceName'
                 properties = @{ Key2 = @{ SubKey2 = 'SubValue2' } }
             }
             @{
                 Name = 'ResourceB'
+                Type = 'ResourceType/ResourceName'
                 properties = @{ Key3 = 'Value3' }
             }
             @{
                 Name = 'ResourceC'
+                Type = 'ResourceType/ResourceName'
                 properties = @{ Key4 = 'Value4' }
             }
             @{
                 Name = 'ResourceD'
+                Type = 'ResourceType/ResourceName'
                 properties = @{ Key5 = 'Value5' }
             }
 

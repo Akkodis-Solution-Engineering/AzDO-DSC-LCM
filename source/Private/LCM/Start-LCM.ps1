@@ -35,64 +35,38 @@ Invokes the DSC configuration in 'Set' mode using the specified JSON configurati
 function Start-LCM {
     # Declare parameters for the function with default values and validation where needed
     param (
+        [Parameter(Mandatory = $true)]
         [string] $FilePath, # The path to the configuration file (.yaml/.yml or .json)
         [ValidateSet("Test", "Set")] # Ensures that Mode can only be 'Test' or 'Set'
         [string] $Mode = "Test", # Default mode is 'Test', can be set to 'Set' for applying changes,
-        [String] $ReportPath = $null # Optional parameter for specifying a report path
+        [String] $ReportPath = $null, # Optional parameter for specifying a report path
+        [Parameter(Mandatory = $true)]
+        [String] $DSCCompositeResourcePath
     )
 
     # Clear StopTaskProcessing variable
     $script:StopTaskProcessing = $false
-
+    $references.Clear()
+    
     $reporting = [System.Collections.Generic.List[PSCustomObject]]::New()
 
-    # Determine the file extension of the provided FilePath
-    $fileExtension = [System.IO.Path]::GetExtension($FilePath)
-    Write-Verbose "File extension determined: $fileExtension"
+    $pipeline = [DSCConfigurationFile]::New($FilePath, $DSCCompositeResourcePath)
 
-    # Load the configuration from the YAML or JSON file into the $pipeline variable
-    if ($fileExtension -eq ".yaml" -or $fileExtension -eq ".yml") {
-        $pipeline = Get-Content $FilePath | ConvertFrom-Yaml
-        Write-Verbose "Loaded YAML configuration from file: $FilePath"
-    }
-    elseif ($fileExtension -eq ".json") {
-        $pipeline = Get-Content $FilePath | ConvertFrom-Json -AsHashtable
-        Write-Verbose "Loaded JSON configuration from file: $FilePath"
-    }
+    Write-Host "--> Merging Partial Resources with Parents"
 
-    # Clear any existing data in these hashtables before populating them
-    $parameters.Clear()
-    $variables.Clear()
-    $references.Clear()
-    Write-Verbose "Cleared existing data in parameters, variables, and references hashtables"
+    $tasks = Invoke-CustomTask -Tasks $pipeline.resources -CustomTaskName "Merge-StubResources"
 
-    Write-Host "---------------------------------------------------------------------" -ForegroundColor Green
-    Write-Host "Processing configuration file: $FilePath" -ForegroundColor Green
-    Write-Host "Mode: $Mode" -ForegroundColor Green
-    Write-Host "Report Path: $ReportPath" -ForegroundColor Green
-    Write-Host "---------------------------------------------------------------------" -ForegroundColor Green
-    Write-Host "--> Setting Variables:" -ForegroundColor Green
-
-    # Retrieve default values for parameters and set variables based on the pipeline's content
-    #$defaultValues = GetDefaultValues -Source $pipeline.parameters
-    $parameterizedProperties = GetDefaultValues -Source $pipeline.parameters
-
-    SetVariables -Source $pipeline.variables -Target $variables
-    SetVariables -Source $defaultValues -Target $parameters
-
-    Write-Verbose "Retrieved default values for parameters and set variables based on pipeline content"
-    
     Write-Host "--> Sorting tasks based on dependencies:" -ForegroundColor Green
 
     # Sort the tasks based on their dependencies to ensure correct execution order
-    $tasks = Invoke-CustomTask -Tasks $pipeline.resources -CustomTaskName "Sort-DependsOn"
+    $tasks = Invoke-CustomTask -Tasks $Tasks -CustomTaskName "Sort-DependsOn"
     Write-Verbose "Sorted tasks based on dependencies"
 
     # Invoke the PreParse the rules to process the tasks before formatting them
     Write-Host "--> Processing PreParse Rules:" -ForegroundColor Green
 
     # Invoke the PreParse the rules to process the tasks before formatting them 
-    Invoke-PreParseRules -Tasks $pipeline.resources
+    Invoke-PreParseRules -Tasks $Tasks
     
     # Invoke the Format Tasks Rules
     Write-Host "--> Processing Formatting Tasks:" -ForegroundColor Green
@@ -160,9 +134,6 @@ function Start-LCM {
         $resourceType = $task.type.Split("/")[1]
         Write-Verbose "Extracted module name: $module and resource type: $resourceType"
         
-        # Iterate through the properties of the task and interpolate parameterized values
-        #$Property = Expand-ParameterInArray -InputArray $task.properties
-
         # Replace any variables in the properties with their actual values
         $Property = Expand-HashTable -InputHashTable $task.properties
 
@@ -199,13 +170,28 @@ function Start-LCM {
         }
         elseif ($Mode -eq "Set") {
 
-            $resourceParameters.Method = "Set"
-
             try {
+                # Execute the 'Set' method to make changes
+                $resourceParameters.Method = "Set"
                 $setResult = Invoke-DscResource @resourceParameters
                 Write-Verbose "Executed 'Set' method to make changes: [$($task.type)/$($task.name)]"
-                $Message = "Resource set to desired state"
-                $Result = "PASS"
+
+                # Retest the resource to ensure the changes were applied successfully
+                $resourceParameters.Method = "Test"
+                $result = Invoke-DscResource @resourceParameters
+                Write-Verbose "Executed 'Test' method to verify changes: [$($task.type)/$($task.name)]"
+
+                # If not in the desired state and Mode is 'Set', execute the 'Set' method to apply changes
+                if ($result.InDesiredState) {
+                    $Message = "Resource set to desired state"
+                    $Result = "PASS"
+                    Write-Verbose "Resource set to desired state: [$($task.type)/$($task.name)]"
+                } else {
+                    $Message = "Failed to set resource to desired state"
+                    $Result = "FAIL"
+                    Write-Verbose "Failed to set resource to desired state: [$($task.type)/$($task.name)]"
+                }
+
             }
             catch {
                 Write-Error "Failed to apply changes with 'Set' method: [$($task.type)/$($task.name)]"

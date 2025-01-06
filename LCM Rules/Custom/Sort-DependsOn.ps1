@@ -35,7 +35,7 @@ param(
 # Order the Tasks according to DependsOn Property
 
 Write-Verbose "[Sort-DependsOn] Separating resources with and without DependsOn property"
-$ResourcesWithoutDependsOn, $ResourcesWithDependsOn = $PipelineResources.Where({ ($null -eq $_.DependsOn) -or ($_.DependsOn.Count -eq 0) }, 'Split')
+$ResourcesWithoutDependsOn, $ResourcesWithDependsOn = $PipelineResources.Where({ [String]::IsNullOrEmpty($_.DependsOn) -or ($_.DependsOn.Count -eq 0) }, 'Split')
 
 #
 # Format the DependsOn Property by ensuring the Resource parent is before the child.

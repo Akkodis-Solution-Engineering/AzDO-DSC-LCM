@@ -1,5 +1,5 @@
 
-Describe 'git Function Tests' {
+Describe 'git Function Tests' -Tag Unit {
 
     BeforeAll {
 

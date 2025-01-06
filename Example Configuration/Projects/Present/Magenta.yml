@@ -10,12 +10,17 @@ variables: {
 
 resources:
 
+- name: Configuration Git Repository Stub Resource
+  type: AzureDevOpsDsc/AzDoGitRepository
+  merge_with: AzureDevOpsDsc/AzDoGitRepository/Configuration Git Repository
+  properties:
+    ProjectName: $ProjectName
+
 - name: Configuration Git Repository
   type: AzureDevOpsDsc/AzDoGitRepository
   dependsOn: 
     - AzureDevOpsDsc/AzDoProject/Project
   properties:
-    ProjectName: $ProjectName
     RepositoryName: $ProjectRepositoryName
 
 - name: Configuration Git Permissions

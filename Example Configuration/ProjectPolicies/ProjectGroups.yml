@@ -11,6 +11,10 @@ variables: {
 
 resources:
 
+  - name: DSCStub
+    merge_with: AzureDevOpsDsc/AzDoProjectGroup/CON Readers
+    
+
   - name: CON Readers
     type: AzureDevOpsDsc/AzDoProjectGroup
     dependsOn: 

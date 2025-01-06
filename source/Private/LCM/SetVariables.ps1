@@ -23,15 +23,15 @@ function Set-Variables {
     [CmdletBinding()]
     [Alias('SetVariables')]
     param (
-        [hashtable] $Source,
-        [hashtable] $Target
+        [hashtable] $Source
     )
 
     foreach ($key in $Source.Keys) {
-        $Target.Add($key, $Source[$key])
-
         $varName = $key.Replace(".", "_")
         New-Variable -Name $varName -Value $Source[$key] -Scope Script -Force | Out-Null
         New-Item -Path env:varName -Value $Source[$key] -ErrorAction SilentlyContinue
     }
+
+    $Source
+    
 }

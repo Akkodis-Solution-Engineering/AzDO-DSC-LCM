@@ -1,5 +1,11 @@
 # AzDO-DSC-LCM
 
+[![Development Branch Code Coverage Status](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/Development.CodeCoverage.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/Development.CodeCoverage.yml)
+[![Development Intergration Test Status](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/Development.IntergrationTests.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/Development.IntergrationTests.yml)
+[![Main Branch Code Coverage Status](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/Main.CodeCoverage.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/Main.CodeCoverage.yml)
+[![Main Intergration Test Status](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/Main.IntergrationTests.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/Main.IntergrationTests.yml)
+[![Nightly Dev Build](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/nightly-dev-build.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/nightly-dev-build.yml)
+[![CodeQL Advanced](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/codeql.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/codeql.yml)
 [![Current Code Coverage Status](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/CodeCoverage.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/CodeCoverage.yml)
 
 ## Overview
@@ -201,6 +207,44 @@ In the realm of configuration, there are specialized commands designed to modify
      - __If Using Personal Access Token (PAT):__  
        Add the custom identity to Azure DevOps and generate a PAT to authenticate and authorize actions within the pipeline.
 
+1. __Deploy the Local Configuration Manager__
+
+    Installation Script:
+
+    ``` PowerShell
+    #
+    # Install Module Dependencies
+    Install-Module PSDesiredStateConfiguration, Datum, Datum.InvokeCommand -Force -Scope AllUsers -SkipPublisherCheck
+    Write-Host "Installing Dependencies Modules"
+
+    #
+    # Set Enviroment Variables
+
+    # Define the directory paths
+    $agentDir = "C:\Agent"
+    $baseDir = "C:\AzureDevOpsDSC"
+    $logsDir = "$baseDir\Logs"
+    $cacheDir = "$baseDir\Cache"
+
+    # Create the directories if they do not exist
+    $null = New-Item -Path $logsDir -ItemType Directory -Force
+    $null = New-Item -Path $cacheDir -ItemType Directory -Force
+    $null = New-Item -Path $agentDire -ItemType Directory -Force
+
+    # Define environment variable values
+    $cacheEnvVar = "$cacheDir"
+    $warningLogEnvVar = "$logsDir\WarningLog.txt"
+    $errorLogEnvVar = "$logsDir\ErrorLog.txt"
+
+    # Set the environment variables
+    [System.Environment]::SetEnvironmentVariable("AZDODSC_CACHE_DIRECTORY", $cacheEnvVar, [System.EnvironmentVariableTarget]::Machine)
+    [System.Environment]::SetEnvironmentVariable("AZDO_WARNINGLOGGING_FILEPATH", $warningLogEnvVar, [System.EnvironmentVariableTarget]::Machine)
+    [System.Environment]::SetEnvironmentVariable("AZDO_ERRORLOGGING_FILEPATH", $errorLogEnvVar, [System.EnvironmentVariableTarget]::Machine)
+
+    # Output to confirm creation
+    Write-Host "Directories and environment variables have been created successfully."
+    ```
+
 1. __Ensure that the Agent Pools have required dependencies__
 
     Ensure that the Agent Pool is equipped with all necessary PowerShell module dependencies as specified in the module manifest file [`source\azdo-dsc-lcm.psd1`](.\source\azdo-dsc-lcm.psd1). These dependencies are crucial for the proper functioning of the Local Configuration Manager (LCM) within your Azure DevOps environment.
@@ -250,7 +294,60 @@ In the realm of configuration, there are specialized commands designed to modify
 
 1. __Setup the Azure DevOps Pipeline:__
 
-    - TODO: More documentation is required.
+    __Template__:
+
+    ``` YAML
+      # Starter pipeline
+      # Start with a minimal pipeline that you can customize to build and deploy your code.
+      # Add steps that build, run tests, deploy, and more:
+      # https://aka.ms/yaml
+
+      schedules: 
+        - cron: '0 05-20 * * 1-5'
+          displayName: Hourly LCM Check (Test)
+          always: true
+          branches:
+            include:
+            - master
+        - cron: '0 21 * * 1-5'
+          displayName: LCM Enforcement (Set)
+          always: true
+          branches:
+            include:
+            - master
+
+      variables:
+      - name: LCM_Method
+        ${{ if eq(variables['Build.CronSchedule.DisplayName'], 'LCM Enforcement (Set)') }}:
+          value: 'Set'
+        ${{ else }}:
+          value: 'Test'
+        readonly: true
+
+      #container:
+      pool:
+        name: azdo_dsc_lcm
+
+      steps:
+
+        - pwsh: |
+            Import-Module AzDO-DSC-LCM, AzureDevOpsDsc;
+            Write-Host "Source: $(build.sourcesDirectory)"
+            Write-Host "Method: $(LCM_Method)"
+
+            $params = @{
+              AzureDevopsOrganizationName = 'AzDoManagmentOrg'
+              exportConfigDir = 'C:\AzureDevOpsDSC\Configuration Export\'
+              ConfigurationSourcePath = "$(build.sourcesDirectory)"
+              JITToken = 'na'
+              Mode = "$(LCM_Method)"
+              ReportPath = 'C:\AzureDevOpsDSC\Reporting\'
+            }
+            Invoke-AZDoLCM @params
+          displayName: Trigger the LCM
+          workingDirectory: "$(build.sourcesDirectory)"
+          errorActionPreference: continue
+    ```
 
     1. __Test to Ensure the LCM is Running Correctly:__
 

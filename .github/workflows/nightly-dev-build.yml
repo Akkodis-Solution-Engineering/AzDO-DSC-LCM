@@ -35,7 +35,7 @@ jobs:
         run: echo "BUILD_VERSION=$(cat ./output/version.txt)" >> $GITHUB_OUTPUT
 
       - name: Step 4 - Upload Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ github.run_id }}
           path: ./output/azdo-dsc-lcm/

@@ -55,7 +55,7 @@ jobs:
         run: write-host $("${{ env.BUILD_VERSION }}-${{ github.run_number }}")
 
       - name: Step 1 - Download Artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: ${{ github.run_id }}
 

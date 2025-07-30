@@ -1,0 +1,4 @@
+Enum ExecutionMethod {
+    'Test'
+    'Set'
+}

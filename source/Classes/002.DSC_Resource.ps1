@@ -3,6 +3,7 @@ class DSC_Resource : DSCBaseResource {
     [string] $postExecutionScript
     [string] $dependsOn = $null
     [bool] $mergable = $false
+    [ExecutionMethod] $executionMethodOverride = $null
 
     DSC_Resource([hashtable]$ht) {
 
@@ -30,6 +31,9 @@ class DSC_Resource : DSCBaseResource {
         }
         if ($ht.ContainsKey('mergable')) {
             $this.mergable = $ht['mergable']
+        }
+        if ($ht.ContainsKey('executionMethod')) {
+            $this.executionMethod = $ht['executionMethod']
         }
 
     }

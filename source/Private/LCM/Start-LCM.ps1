@@ -163,12 +163,20 @@ function Start-LCM {
             Result  = $result.InDesiredState ? "PASS" : "FAIL"
             Message = $result.Message
         })
-     
+
+        # Set the execution mode based on the provided Mode parameter.
+        $ExecutionMode = $Mode
+        # If the task has an override for the execution method, use it.
+        if ($null -ne $task.executionMethodOverride) {
+            Write-Verbose "Using custom execution method: $($task.executionMethodOverride)"
+            $ExecutionMode = $task.executionMethodOverride
+        }
+
         # If not in the desired state and Mode is 'Set', execute the 'Set' method to apply changes
         if ($result.InDesiredState) {
             Write-Verbose "Resource is in the desired state: [$($task.type)/$($task.name)]"
         }
-        elseif ($Mode -eq "Set") {
+        elseif ($ExecutionMode -eq "Set") {
 
             try {
                 # Execute the 'Set' method to make changes

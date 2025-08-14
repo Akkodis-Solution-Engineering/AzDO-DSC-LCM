@@ -1,4 +1,4 @@
-Enum ExecutionMethod {
-    'Test'
-    'Set'
+enum ExecutionMethod {
+    Test
+    Set
 }

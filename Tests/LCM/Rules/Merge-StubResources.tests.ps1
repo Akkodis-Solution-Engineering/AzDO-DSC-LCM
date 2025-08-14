@@ -8,10 +8,13 @@ Describe "Merge-StubResources" -Tag Unit, LCM, Rules, Sort {
         $DSC_Resource           = (Get-FunctionPath '002.DSC_Resource.ps1').FullName
         $DSCStub                = (Get-FunctionPath '003.DSCStub.ps1').FullName
         $DSCCompositeResource   = (Get-FunctionPath '004.DSCCompositeResource.ps1').FullName
+        $ExecutionMethod        = (Get-FunctionPath '000.ExecutionMethod.ps1').FullName
 
         # Load the functions to test
         $preParseFilePath       = (Get-FunctionPath 'Merge-StubResources.ps1').FullName
         $joinPropertiesFilePath = (Get-FunctionPath 'mergeProperties.ps1').FullName
+
+        . $ExecutionMethod
 
         . $DSCConfigurationFile
         . $DSCBaseResource

@@ -5,7 +5,11 @@ Describe "DSC_Resource Class Tests" -Tag Unit {
 
         $DSCBaseResource = (Get-FunctionPath '001.DSCBaseResource.ps1').FullName
         $DSC_Resource = (Get-FunctionPath '002.DSC_Resource.ps1').FullName
+        $ExecutionMethod = (Get-FunctionPath '000.ExecutionMethod.ps1').FullName
 
+        # Load the Enums First
+        . $ExecutionMethod
+        # Load the Classes
         . $DSCBaseResource
         . $DSC_Resource
         
@@ -50,6 +54,7 @@ Describe "DSC_Resource Class Tests" -Tag Unit {
             $resource.postExecutionScript | Should -Be "SomeScript"
             $resource.dependsOn     | Should -Be "SomeDependency"
             $resource.mergable      | Should -Be $true
+            $resource.executionMethodOverride | Should -Be 'None'
 
         }
 

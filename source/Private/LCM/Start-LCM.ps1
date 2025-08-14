@@ -167,7 +167,7 @@ function Start-LCM {
         # Set the execution mode based on the provided Mode parameter.
         $ExecutionMode = $Mode
         # If the task has an override for the execution method, use it.
-        if ($null -ne $task.executionMethodOverride) {
+        if ($task.executionMethodOverride -ne 'None') {
             Write-Verbose "Using custom execution method: $($task.executionMethodOverride)"
             $ExecutionMode = $task.executionMethodOverride
         }

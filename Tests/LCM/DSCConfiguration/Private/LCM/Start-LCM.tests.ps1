@@ -5,12 +5,15 @@ Describe "Start-LCM Function Tests" -Tag Unit, MockedClass {
         # Load the functions to test
         $preParseFilePath = (Get-FunctionPath 'Start-LCM.ps1').FullName
 
+        $ExecutionMethod = (Get-FunctionPath '000.ExecutionMethod.ps1').FullName
+
         $InvokeCustomTaskPath = (Get-FunctionPath 'Invoke-CustomTask.ps1').FullName
         $InvokePreParseRulesPath = (Get-FunctionPath 'Invoke-PreParseRules.ps1').FullName
         $InvokeFormatTasksPath = (Get-FunctionPath 'Invoke-FormatTasks.ps1').FullName
         $InvokeExpandHashTablePath = (Get-FunctionPath 'Expand-HashTable.ps1').FullName
         $StopTaskProcessingPath = (Get-FunctionPath 'Stop-TaskProcessing.ps1').FullName
 
+        . $ExecutionMethod
         . $preParseFilePath
         . $InvokeCustomTaskPath
         . $InvokePreParseRulesPath
@@ -35,6 +38,12 @@ Describe "Start-LCM Function Tests" -Tag Unit, MockedClass {
             }
         }
 
+        enum ExecutionMethod {
+            None
+            Test
+            Set
+        }
+
         class DSCConfigurationFile {
 
             [HashTable]$parameters
@@ -42,6 +51,7 @@ Describe "Start-LCM Function Tests" -Tag Unit, MockedClass {
             [HashTable[]]$resources
             hidden [string]$configurationFilePath
             hidden [bool]$isCompositeResource = $false
+            [ExecutionMethod]$executionMethodOverride = 'None'
 
             DSCConfigurationFile ([string]$configurationFile, [string]$DSCCompositeResourcePath) {
 
@@ -279,6 +289,31 @@ Describe "Start-LCM Function Tests" -Tag Unit, MockedClass {
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Property.prop2 -eq "value2" } -Exactly 2
 
         }       
+
+    }
+
+    Context "when handling different execution methods" {
+
+        BeforeAll {
+            Mock -CommandName Get-Content -MockWith { '{"parameters": {}, "variables": {}, "resources": []}' }
+            $references.Clear()
+        }
+
+        It "should handle 'None' execution method correctly" {
+            Mock -CommandName Invoke-DscResource -MockWith {
+                [PSCustomObject]@{ InDesiredState = $true; Message = "No action taken." }
+            }
+
+            Mock -CommandName Write-Verbose -MockWith {
+                param($Message)
+                Write-Host "Verbose: $Message"
+            } -ParameterFilter { $Message -like "Using custom execution method:*"} -Verifiable
+
+            Start-LCM -FilePath "test.json" -Mode "None" -DSCCompositeResourcePath "mock-path"
+
+            Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "None" } -Exactly 1
+            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter -Exactly 1
+        }
 
     }
 

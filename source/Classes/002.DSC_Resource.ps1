@@ -3,7 +3,7 @@ class DSC_Resource : DSCBaseResource {
     [string] $postExecutionScript
     [string] $dependsOn = $null
     [bool] $mergable = $false
-    [ExecutionMethod] $executionMethodOverride = $null
+    [ExecutionMethod] $executionMethodOverride = 'None'
 
     DSC_Resource([hashtable]$ht) {
 

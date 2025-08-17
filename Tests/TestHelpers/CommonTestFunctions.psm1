@@ -77,12 +77,14 @@ Function Get-ModulePath {
         $Global:RepositoryRoot = Split-RecurivePath $PSScriptRoot -Times 2
     }
 
-    $SourcesDirectory = Join-Path $Global:RepositoryRoot 'source'
-    $ClassesDirectory = Join-Path $SourcesDirectory 'Classes'
-    $PublicFunctionsDirectory = Join-Path $SourcesDirectory 'Public'
-    $PrivateFunctionsDirectory = Join-Path $SourcesDirectory 'Private'
+    $SourcesDirectory   = Join-Path $Global:RepositoryRoot 'source'
+    $EnumsDirectory     = Join-Path $SourcesDirectory 'Enum'    
+    $ClassesDirectory   = Join-Path $SourcesDirectory 'Classes'
+    $PublicFunctionsDirectory   = Join-Path $SourcesDirectory 'Public'
+    $PrivateFunctionsDirectory  = Join-Path $SourcesDirectory 'Private'
 
     return @{
+        EnumsDirectory = $EnumsDirectory
         SourcesDirectory = $SourcesDirectory
         ClassesDirectory = $ClassesDirectory
         PublicFunctionsDirectory = $PublicFunctionsDirectory

@@ -8,6 +8,8 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
         # Load the module into memory
         $modulePath = Get-ModulePath
 
+        # Load the Enums First
+        Get-ChildItem -LiteralPath $modulePath.EnumsDirectory -Recurse -File -Include *.ps1 | ForEach-Object { . $_.FullName }
         # Load the Classes First
         Get-ChildItem -LiteralPath $modulePath.ClassesDirectory -Recurse -File -Include *.ps1 | Where-Object { . $_.FullName }
         # Load the Public Functions

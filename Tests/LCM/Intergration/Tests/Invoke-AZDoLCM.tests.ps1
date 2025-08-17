@@ -157,4 +157,41 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
         }
 
     }
+
+    Context "When running Invoke-AZDoLCM with a custom execution method" {
+
+        BeforeAll {
+            Import-Module 'azdo-dsc-lcm'
+        }
+
+        BeforeEach {
+            # Reset the parameters
+            $references = @{}
+            $variables = @{}
+            $parameters = @{}
+
+            Mock -CommandName Write-Host
+            Mock -CommandName Write-Error
+            Mock -CommandName Write-Verbose
+            Mock -CommandName Write-Warning
+
+        }
+
+        It "Should use the custom execution method for Test" {
+
+            $params.Mode = 'Set'
+            $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
+            $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\CustomExecutionMethod'
+
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' } -MockWith { return @{} }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Test' } -MockWith { return @{ InDesiredState = $true } }
+            Mock -CommandName Write-Verbose
+
+            Start-LCM -FilePath "test.json" -Mode Set -DSCCompositeResourcePath "mock-path"
+
+            Assert-MockCalled -CommandName Invoke-DscResource -Exactly 2
+            Assert-MockCalled -CommandName Write-Verbose -Exactly 1 -ParameterFilter { $Message -eq "Using custom execution method: Test" }
+        }
+
+    }
 }

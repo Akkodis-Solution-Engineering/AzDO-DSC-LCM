@@ -97,6 +97,19 @@ The Local Configuration Manager (LCM) provides a set of features applicable to a
         - AzureDevOpsDsc/AzDoProjectGroup/CON Board Administrators
     ```
 
+- __executionMethodOverride__: This feature provides the capability to customize and override the default execution method used by the Local Configuration Manager (LCM). By allowing users to specify an alternative execution method, it enhances flexibility and control over how configurations are applied. This is particularly beneficial in scenarios where specific execution requirements are necessary, enabling tailored solutions that better meet the needs of diverse environments and use cases. Values are 'none', 'test' and 'set'. Setting the value to 'none' is equivalent to leaving the property unset.
+
+    __Syntax:__
+    executionMethodOverride: ['none', 'test', 'set']
+
+    __Example:__
+
+    ```yaml
+    - name: Default Git Configuration Permissions
+      type: AzureDevOpsDsc/AzDoGitPermission
+      executionMethodOverride: test
+    ```    
+
 These features collectively enhance the robustness and adaptability of DSC resources managed by the LCM, allowing for more precise and context-sensitive configuration management.
 
 ### Configuration Specific Commands

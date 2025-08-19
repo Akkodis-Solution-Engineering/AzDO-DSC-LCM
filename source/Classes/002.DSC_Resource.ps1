@@ -3,6 +3,7 @@ class DSC_Resource : DSCBaseResource {
     [string] $postExecutionScript
     [string] $dependsOn = $null
     [bool] $mergable = $false
+    [ExecutionMethod] $executionMethodOverride = 'None'
 
     DSC_Resource([hashtable]$ht) {
 
@@ -22,14 +23,27 @@ class DSC_Resource : DSCBaseResource {
         if ($ht.ContainsKey('condition')) {
             $this.condition = $ht['condition']
         }
+
         if ($ht.ContainsKey('postExecutionScript')) {
             $this.postExecutionScript = $ht['postExecutionScript']
         }
+
         if ($ht.ContainsKey('dependsOn')) {
             $this.dependsOn = $ht['dependsOn']
         }
+
         if ($ht.ContainsKey('mergable')) {
             $this.mergable = $ht['mergable']
+        }
+
+        if ($ht.ContainsKey('executionMethodOverride')) {
+
+            try {
+                $this.executionMethodOverride = [ExecutionMethod]$ht['executionMethodOverride']
+            } catch {
+                throw "[DSC_Resource] Invalid executionMethodOverride value: $($_.Exception.Message). Valid values are: 'Test', 'Set', 'None'."
+            }
+
         }
 
     }

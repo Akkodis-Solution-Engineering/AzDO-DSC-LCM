@@ -1,10 +1,11 @@
 
 task Copy_LCM_Rules {
 
-    $sourcePath = "$PSScriptRoot\..\..\LCM Rules" 
-    $destinationPath = "$PSScriptRoot\..\..\Output\azdo-dsc-lcm\"
-    $fullVersionPath = Get-ChildItem -Path $destinationPath
-
-    Copy-Item -Path $sourcePath -Destination $fullVersionPath.FullName -Recurse -Force
+    $repositoryRoot = Get-Item "$PSScriptRoot\..\..\"
+    $sourcePath = "$($repositoryRoot.FullName)\LCM Rules"
+    $destinationPath = "$($repositoryRoot.FullName)\output\azdo-dsc-lcm\"
+    $newVersion = Get-ChildItem $destinationPath -Directory
+    #$fullVersionPath = Get-Item -Path $destinationPath.FullName
+    Copy-Item -Path $sourcePath -Destination $newVersion.FullName -Recurse -Force
 
 }

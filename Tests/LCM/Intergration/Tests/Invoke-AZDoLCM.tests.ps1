@@ -8,6 +8,8 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
         # Load the module into memory
         $modulePath = Get-ModulePath
 
+        # Load the Enums First
+        Get-ChildItem -LiteralPath $modulePath.EnumsDirectory -Recurse -File -Include *.ps1 | ForEach-Object { . $_.FullName }
         # Load the Classes First
         Get-ChildItem -LiteralPath $modulePath.ClassesDirectory -Recurse -File -Include *.ps1 | Where-Object { . $_.FullName }
         # Load the Public Functions
@@ -152,6 +154,63 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
             $report | Where-Object { $_.Result -eq 'SKIPPED' } | Should -HaveCount 3
             $report | Where-Object { $_.Result -eq 'PASS' } | Should -HaveCount 1
             $report | Where-Object { $_.Result -eq 'FAIL' } | Should -BeNullOrEmpty
+        }
+
+    }
+
+    Context "When running Invoke-AZDoLCM with a custom execution method" {
+
+        BeforeAll {
+            Import-Module 'azdo-dsc-lcm'
+        }
+
+        BeforeEach {
+            # Reset the parameters
+            $references = @{}
+            $variables = @{}
+            $parameters = @{}
+
+            Mock -CommandName Write-Host
+            Mock -CommandName Write-Error
+            Mock -CommandName Write-Verbose
+            Mock -CommandName Write-Warning
+
+        }
+
+        It "Should use the custom execution method for Test" {
+
+            $params.Mode = 'Set'
+            $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
+            $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\CustomExecutionMethod'
+
+            #Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' } -MockWith { return @{} }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Test' } -MockWith { return @{ InDesiredState = $true } }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' } 
+            Mock -CommandName Write-Verbose
+
+            Invoke-AZDoLCM @params 
+
+            Assert-MockCalled -CommandName Write-Verbose -Times 1 -ParameterFilter { $Message -eq "Using custom execution method: Test" }
+            Assert-MockCalled -CommandName Invoke-DscResource -Times 2 -ParameterFilter { $Method -eq 'Test' }
+            Assert-MockCalled -CommandName Invoke-DscResource -Exactly 0 -ParameterFilter { $Method -eq 'Set' }
+
+        }
+
+        It "Should not use the custom execution method for None" {
+
+            $params.Mode = 'Set'
+            $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
+            $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\CustomExecutionMethod#2'
+
+            #Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' } -MockWith { return @{} }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Test' } -MockWith { return @{ InDesiredState = $true } }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' } 
+            Mock -CommandName Write-Verbose
+
+            Invoke-AZDoLCM @params 
+
+            Assert-MockCalled -CommandName Write-Verbose -Exactly 0 -ParameterFilter { $Message -eq "Using custom execution method: Test" }
+
         }
 
     }

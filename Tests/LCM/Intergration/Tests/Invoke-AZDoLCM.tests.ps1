@@ -183,14 +183,17 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
             $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
             $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\CustomExecutionMethod'
 
-            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' } -MockWith { return @{} }
+            #Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' } -MockWith { return @{} }
             Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Test' } -MockWith { return @{ InDesiredState = $true } }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' } 
             Mock -CommandName Write-Verbose
 
-            Start-LCM -FilePath "test.json" -Mode Set -DSCCompositeResourcePath "mock-path"
+            Invoke-AZDoLCM @params 
 
-            Assert-MockCalled -CommandName Invoke-DscResource -Exactly 2
-            Assert-MockCalled -CommandName Write-Verbose -Exactly 1 -ParameterFilter { $Message -eq "Using custom execution method: Test" }
+            Assert-MockCalled -CommandName Write-Verbose -Times 1 -ParameterFilter { $Message -eq "Using custom execution method: Test" }
+            Assert-MockCalled -CommandName Invoke-DscResource -Times 2 -ParameterFilter { $Method -eq 'Test' }
+            Assert-MockCalled -CommandName Invoke-DscResource -Exactly 0 -ParameterFilter { $Method -eq 'Set' }
+
         }
 
     }

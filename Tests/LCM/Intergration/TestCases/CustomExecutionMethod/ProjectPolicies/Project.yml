@@ -10,7 +10,7 @@ resources:
 
   - name: Project
     type: AzureDevOpsDsc/AzDoProject
-    postExecutionScript: Stop-TaskProcessing
+    executionMethodOverride: test
     properties:
       projectName: $ProjectName
       projectDescription: $ProjectDescription
@@ -21,6 +21,7 @@ resources:
 
   - name: Project Services
     type: AzureDevOpsDsc/AzDoProjectServices
+    executionMethodOverride: Test
     dependsOn: 
       - AzureDevOpsDsc/AzDoProject/Project
     properties:

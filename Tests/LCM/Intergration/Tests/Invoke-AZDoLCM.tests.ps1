@@ -196,5 +196,22 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
 
         }
 
+        It "Should not use the custom execution method for None" {
+
+            $params.Mode = 'Set'
+            $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
+            $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\CustomExecutionMethod#2'
+
+            #Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' } -MockWith { return @{} }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Test' } -MockWith { return @{ InDesiredState = $true } }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' } 
+            Mock -CommandName Write-Verbose
+
+            Invoke-AZDoLCM @params 
+
+            Assert-MockCalled -CommandName Write-Verbose -Exactly 0 -ParameterFilter { $Message -eq "Using custom execution method: Test" }
+
+        }
+
     }
 }

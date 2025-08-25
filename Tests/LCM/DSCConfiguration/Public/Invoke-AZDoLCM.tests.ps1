@@ -154,6 +154,9 @@ Describe "Invoke-AZDoLCM Function Tests" -Tag Unit {
 
         BeforeAll {
             $Env:AZDODSC_CACHE_DIRECTORY = "mocked"
+            mock -CommandName 'Get-ChildItem' -MockWith { @(
+                [PSCustomObject]@{ Fullname = "$TestDrive\mockConfig.yml" }
+            ) }
         }
 
         AfterAll {
@@ -161,9 +164,9 @@ Describe "Invoke-AZDoLCM Function Tests" -Tag Unit {
         }
 
         it "should call Start-LCM with the specified ConfigurationMode" {
-            Mock -CommandName 'Start-LCM' -Verifiable -MockWith { return $true }
+            Mock -CommandName 'Start-LCM' -MockWith { return $true } -Verifiable
             { Invoke-AZDoLCM -AzureDevopsOrganizationName "MyOrg" -exportConfigDir $exportConfigDir -JITToken "abc123" -ConfigurationMode "Audit" -ConfigurationSourcePath $ConfigurationSourcePath } | Should -Not -Throw
-            Should -Invoke 'Start-LCM' -Exactly 1 -ParameterFilter { $Mode -eq 'Audit' }
+            Should -Invoke 'Start-LCM' -Exactly 1 -ParameterFilter {  $ConfigurationMode -eq 'Audit' }
             Should -InvokeVerifiable
         }
 
@@ -173,16 +176,17 @@ Describe "Invoke-AZDoLCM Function Tests" -Tag Unit {
             Should -Invoke 'Start-LCM' -Exactly 0
         }
 
-        it "should call 'import-yaml' and 'Get-LCMConfigurationMode' if ConfigurationMode is not provided" {
-            Mock -CommandName 'Import-Yaml' -Verifiable -MockWith { return @{ LCMConfigurationMode = @{ ConfigurationMode = 'Scheduled'; ChangeWindows = @() } } }
+        it "should call 'ConvertFrom-Yaml' and 'Get-LCMConfigurationMode' if ConfigurationMode is not provided" {
+            Mock -CommandName 'Get-Content' -Verifiable -MockWith { return "MOCKED CONTENT" }
+            Mock -CommandName 'ConvertFrom-Yaml' -Verifiable -MockWith { return @{ LCMConfigurationMode = @{ ConfigurationMode = 'Scheduled'; ChangeWindows = @() } } }
             Mock -CommandName 'Get-LCMConfigurationMode' -Verifiable -MockWith { return 'Audit' }
             Mock -CommandName 'Start-LCM' -Verifiable -MockWith { return $true }
 
             { Invoke-AZDoLCM -AzureDevopsOrganizationName "MyOrg" -exportConfigDir $exportConfigDir -JITToken "abc123" -ConfigurationSourcePath $ConfigurationSourcePath } | Should -Not -Throw
 
-            Should -Invoke 'Import-Yaml' -Exactly 1
+            Should -Invoke 'ConvertFrom-Yaml' -Exactly 1
             Should -Invoke 'Get-LCMConfigurationMode' -Exactly 1
-            Should -Invoke 'Start-LCM' -Exactly 1 -ParameterFilter { $Mode -eq 'Audit' }
+            Should -Invoke 'Start-LCM' -Exactly 1 -ParameterFilter { $ConfigurationMode -eq 'Audit' }
 
             Should -InvokeVerifiable
         }

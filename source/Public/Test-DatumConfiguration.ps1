@@ -46,7 +46,7 @@ function Test-DatumConfiguration {
     }
 
     # Permitted values for ConfigurationMode are: ApplyOnly, Audit, Enforce, Scheduled
-    if (-not $allowedConfigurationModes -contains $Datum.__Definition.LCMConfigurationMode.ConfigurationMode) {
+    if ($allowedConfigurationModes -notcontains $Datum.__Definition.LCMConfigurationMode.ConfigurationMode) {
         throw "[Test-DatumConfiguration] The Datum Configuration LCMConfigurationMode ConfigurationMode property is not one of the allowed values: $($allowedConfigurationModes -join ', '). The Datum Configuration is invalid and cannot be processed."
     }
 
@@ -61,7 +61,7 @@ function Test-DatumConfiguration {
             throw "[Test-DatumConfiguration] Each ChangeWindow in the Datum Configuration LCMConfigurationMode must contain StartTime, EndTime, and ConfigurationMode properties. The Datum Configuration is invalid and cannot be processed."
         }
         # Permitted values for ConfigurationMode in ChangeWindows are: ApplyOnly, Audit, Enforce
-        if (-not $allowedChangeWindowConfigurationModes -contains $ChangeWindow.ConfigurationMode) {
+        if ($allowedChangeWindowConfigurationModes -notcontains $ChangeWindow.ConfigurationMode) {
             throw "[Test-DatumConfiguration] The ConfigurationMode property in each ChangeWindow of the Datum Configuration LCMConfigurationMode must be one of the allowed values: $($allowedChangeWindowConfigurationModes -join ', '). The Datum Configuration is invalid and cannot be processed."
         }
         # Validate that Start and End are time strings are in the correct 24-hour format.

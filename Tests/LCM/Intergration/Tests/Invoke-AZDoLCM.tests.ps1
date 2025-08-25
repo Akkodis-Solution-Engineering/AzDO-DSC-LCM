@@ -55,7 +55,7 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
             AzureDevopsOrganizationName = 'mock-org'
             exportConfigDir = Join-Path $TestDrive -ChildPath 'Output'
             JITToken = 'mock'
-            Mode = 'test'
+            ConfigurationMode = 'test'
             ConfigurationSourcePath = $null
         }
 
@@ -78,6 +78,21 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
             Mock -CommandName Write-Verbose
             Mock -CommandName Write-Warning
 
+        }
+
+        AfterEach {
+            $params.ConfigurationMode = 'test'
+        }
+
+        It "Should not throw any errors when using 'StandardResources' test case" {
+            $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\StandardResources'
+            { Invoke-AZDoLCM @params } | Should -Not -Throw
+        }
+
+        It "Should not throw any errors when using 'StandardResources' test case with no ConfigurationMode parameter specified" {
+            $params.Remove('ConfigurationMode')
+            $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\StandardResources'
+            { Invoke-AZDoLCM @params } | Should -Not -Throw
         }
 
         It "Should not throw any errors when using 'StandardResources' test case" {
@@ -179,7 +194,7 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
 
         It "Should use the custom execution method for Test" {
 
-            $params.Mode = 'Set'
+            $params.ConfigurationMode = 'Set'
             $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
             $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\CustomExecutionMethod'
 
@@ -198,7 +213,7 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
 
         It "Should not use the custom execution method for None" {
 
-            $params.Mode = 'Set'
+            $params.ConfigurationMode = 'Set'
             $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
             $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\CustomExecutionMethod#2'
 

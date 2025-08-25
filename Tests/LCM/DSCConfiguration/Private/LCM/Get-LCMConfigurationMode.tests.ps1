@@ -7,6 +7,8 @@ Describe "Get-LCMConfigurationMode Function Tests" -Tag Unit, LCM, Configuration
 
         . $preParseFilePath
 
+        Mock -CommandName Write-Host
+
     }
 
     Context "When the top-level ConfigurationMode is 'ApplyOnly', 'Audit', or 'Enforce'" {

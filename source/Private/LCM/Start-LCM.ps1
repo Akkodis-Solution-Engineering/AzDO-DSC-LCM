@@ -188,8 +188,13 @@ function Start-LCM {
         # If not in the desired state and Mode is 'Set', execute the 'Set' method to apply changes
         if ($result.InDesiredState) {
             Write-Verbose "Resource is in the desired state: [$($task.type)/$($task.name)]"
+            Write-Verbose "No action taken as resource is already in the desired state: [$($task.type)/$($task.name)]"
+        } elseif ($ExecutionMode -eq "Test") {
+            Write-Verbose "Resource is NOT in the desired state and ExecutionMode is 'Test': [$($task.type)/$($task.name)]"
+            Write-Verbose "No action taken as ExecutionMode is 'Test': [$($task.type)/$($task.name)]"
         }
-        elseif ($ExecutionMode -eq "Set") {
+        elseif ($ExecutionMode -eq "Set")
+        {
 
             try {
                 # Execute the 'Set' method to make changes
@@ -215,7 +220,7 @@ function Start-LCM {
                 })
             }
         }
-
+    
         # If the task is in 'Continue' state, however the configuration mode is 'ApplyOnly' or 'Enforce', handle the execution accordingly
         if (($CurrentTaskState -eq 'Continue') -and ($ConfigurationMode -eq "ApplyOnly") -and ($ExecutionMode -eq "Set")) {
 

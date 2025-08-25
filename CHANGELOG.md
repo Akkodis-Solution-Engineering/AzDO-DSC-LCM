@@ -8,12 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Stub/Partial Configuration: Enables merging of properties within the LCM at an elevated level for enhanced flexibility.
+- Added `executionMethodOverride` property to DSC-Based Resources.
+- Added Datum.yaml LCMConfigurationMode property. Introduced CaC Change Windows.
 
 ### Changed
 
-- LCM will perform an additional 'Test' after 'Set' to validate that setting has been applied correctly.
+- Replaced "Set" and "Test" modes with "ApplyOnly", "Audit", "Enforce" and "Scheduled"
+- Refactored DSC Resources to be classed-based.
 
 ### Fixed
 
 - Issues with Build script running on 'ubuntu-latest'. Issues with pwsh core handling classes.
 - Fixed Bugs within the Symantec Versioning script. Wasn't detecting tag versions.
+

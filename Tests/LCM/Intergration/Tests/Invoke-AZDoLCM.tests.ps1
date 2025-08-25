@@ -44,9 +44,9 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
         
         # Mock Sucessfull Configuration Application
         Mock -CommandName Invoke-DscResource -ParameterFilter {
-            $Method -eq 'Audit'
+            $Method -eq 'Test'
         } -MockWith { 
-            return @{
+            return @{ 
                 InDesiredState = $true
             }
         }
@@ -194,31 +194,31 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
 
         It "Should use the custom execution method for Test" {
 
-            $params.ConfigurationMode = 'Set'
+            $params.ConfigurationMode = 'Audit'
             $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
             $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\CustomExecutionMethod'
 
             #Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' } -MockWith { return @{} }
-            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Audit' } -MockWith { return @{ InDesiredState = $true } }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Test' } -MockWith { return @{ InDesiredState = $true } }
             Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' } 
             Mock -CommandName Write-Verbose
 
             Invoke-AZDoLCM @params 
 
             Assert-MockCalled -CommandName Write-Verbose -Times 1 -ParameterFilter { $Message -eq "Using custom execution method: Test" }
-            Assert-MockCalled -CommandName Invoke-DscResource -Times 2 -ParameterFilter { $Method -eq 'Audit' }
+            Assert-MockCalled -CommandName Invoke-DscResource -Times 2 -ParameterFilter { $Method -eq 'Test' }
             Assert-MockCalled -CommandName Invoke-DscResource -Exactly 0 -ParameterFilter { $Method -eq 'Set' }
 
         }
 
         It "Should not use the custom execution method for None" {
 
-            $params.ConfigurationMode = 'Set'
+            $params.ConfigurationMode = 'Enforce'
             $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
             $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\CustomExecutionMethod#2'
 
             #Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' } -MockWith { return @{} }
-            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Audit' } -MockWith { return @{ InDesiredState = $true } }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Test' } -MockWith { return @{ InDesiredState = $true } }
             Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' } 
             Mock -CommandName Write-Verbose
 

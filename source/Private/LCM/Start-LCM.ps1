@@ -37,17 +37,27 @@ function Start-LCM {
     param (
         [Parameter(Mandatory = $true)]
         [string] $FilePath, # The path to the configuration file (.yaml/.yml or .json)
-        [ValidateSet("Test", "Set")] # Ensures that Mode can only be 'Test' or 'Set'
-        [string] $Mode = "Test", # Default mode is 'Test', can be set to 'Set' for applying changes,
-        [String] $ReportPath = $null, # Optional parameter for specifying a report path
         [Parameter(Mandatory = $true)]
-        [String] $DSCCompositeResourcePath
+        [ValidateSet("ApplyOnly", "Audit", "Enforce")] # Ensures that ConfigurationMode can only be one of the specified values
+        [string] $ConfigurationMode, # The mode of operation for the LCM (e.g., ApplyOnly, Audit, Enforce, Scheduled)
+        [string] $ReportPath = $null, # Optional parameter for specifying a report path
+        [Parameter(Mandatory = $true)]
+        [string] $DSCCompositeResourcePath
     )
 
     # Clear StopTaskProcessing variable
     $script:StopTaskProcessing = $false
     $references.Clear()
     
+    $Mode = $( switch ($ConfigurationMode) {
+        "ApplyOnly" { "Set" }
+        "Audit" { "Test" }
+        "Enforce" { "Set" }
+        default { "Test" } # Default to Test if no match
+    })
+
+    Write-Verbose "Configuration Mode: $ConfigurationMode, Execution Mode: $Mode"
+
     $reporting = [System.Collections.Generic.List[PSCustomObject]]::New()
 
     $pipeline = [DSCConfigurationFile]::New($FilePath, $DSCCompositeResourcePath)
@@ -172,18 +182,65 @@ function Start-LCM {
             $ExecutionMode = $task.executionMethodOverride
         }
 
+        # Set Execution Processing Mode
+        $CurrentTaskState = 'Continue'
+
         # If not in the desired state and Mode is 'Set', execute the 'Set' method to apply changes
         if ($result.InDesiredState) {
             Write-Verbose "Resource is in the desired state: [$($task.type)/$($task.name)]"
+            Write-Verbose "No action taken as resource is already in the desired state: [$($task.type)/$($task.name)]"
+        } elseif ($ExecutionMode -eq "Test") {
+            Write-Verbose "Resource is NOT in the desired state and ExecutionMode is 'Test': [$($task.type)/$($task.name)]"
+            Write-Verbose "No action taken as ExecutionMode is 'Test': [$($task.type)/$($task.name)]"
         }
-        elseif ($ExecutionMode -eq "Set") {
+        elseif ($ExecutionMode -eq "Set")
+        {
 
             try {
                 # Execute the 'Set' method to make changes
                 $resourceParameters.Method = "Set"
                 $setResult = Invoke-DscResource @resourceParameters
                 Write-Verbose "Executed 'Set' method to make changes: [$($task.type)/$($task.name)]"
+            } catch {
+                # If the 'Set' method fails, log the error and continue
+                Write-Error "Failed to apply changes with 'Set' method: [$($task.type)/$($task.name)]"
+                $CurrentTaskState = 'Stop'
 
+                $Message = $_.Exception.Message
+                $Result = "FAIL"
+
+                $reporting.Add([PSCustomObject]@{
+                    Counter     = $TaskCounter
+                    Name        = $task.name
+                    Type        = $task.type
+                    Status      = "Set"
+                    Method      = "SET"
+                    Result      = "FAIL"
+                    Message     = $_.Exception.Message
+                })
+            }
+        }
+    
+        # If the task is in 'Continue' state, however the configuration mode is 'ApplyOnly' or 'Enforce', handle the execution accordingly
+        if (($CurrentTaskState -eq 'Continue') -and ($ConfigurationMode -eq "ApplyOnly") -and ($ExecutionMode -eq "Set")) {
+
+            # If the configuration mode is 'ApplyOnly', apply the changes without testing again
+            Write-Verbose "ConfigurationMode is 'ApplyOnly', applying changes without testing again: [$($task.type)/$($task.name)]"
+            # Update the reporting list
+            $null = $reporting.Add([PSCustomObject]@{
+                Counter     = $TaskCounter
+                Name        = $task.name
+                Type        = $task.type
+                Status      = "Set"
+                Method      = "SET"
+                Result      = "PASS"
+                Message     = "Resource set to desired state in 'ApplyOnly' mode."
+            })
+
+        } elseif (($CurrentTaskState -eq 'Continue') -and ($ConfigurationMode -eq "Enforce") -and ($ExecutionMode -eq "Set")) {
+
+            # If the configuration mode is 'Enforce', we need to ensure the resource is in the desired state
+            try {
                 # Retest the resource to ensure the changes were applied successfully
                 $resourceParameters.Method = "Test"
                 $result = Invoke-DscResource @resourceParameters
@@ -200,28 +257,23 @@ function Start-LCM {
                     Write-Verbose "Failed to set resource to desired state: [$($task.type)/$($task.name)]"
                 }
 
-            }
-            catch {
+            } catch {
                 Write-Error "Failed to apply changes with 'Set' method: [$($task.type)/$($task.name)]"
                 $Message = $_.Exception.Message
                 $Result = "FAIL"
             }
-            finally {
-                # Update the reporting list with the result of the 'Set' operation
-                $null = $reporting.Add([PSCustomObject]@{
-                    Counter     = $TaskCounter
-                    Name        = $task.name
-                    Type        = $task.type
-                    Status      = "Set"
-                    Method      = "SET"
-                    Result      = $Result
-                    Message     = $Message
-                })
+
+            # Update the reporting list with the result of the 'Set' operation
+            $null = $reporting.Add([PSCustomObject]@{
+                Counter     = $TaskCounter
+                Name        = $task.name
+                Type        = $task.type
+                Status      = "Set"
+                Method      = "SET"
+                Result      = $Result
+                Message     = $Message
+            })
             
-            }
-        }
-        else {
-            Write-Verbose "Change needed, but mode is not set to 'Set': [$($task.type)/$($task.name)]"
         }
 
         #
@@ -244,7 +296,6 @@ function Start-LCM {
         Write-Verbose "Stored output of 'Get' operation in references table for resource: [$($task.type)/$($task.name)]"
 
     }
-
 
     #
     # Report the results of the DSC Configuration

@@ -139,10 +139,10 @@ Describe "Start-LCM Function Tests" -Tag Unit, MockedClass {
 
         It 'should correctly load configuration file' {
             Mock -CommandName Invoke-CustomTask -MockWith { throw "mock error"}
-            { Start-LCM -FilePath "test.json" -DSCCompositeResourcePath "C:\CompositeResource" } | Should -Throw "mock error"
+            { Start-LCM -FilePath "test.json" -DSCCompositeResourcePath "C:\CompositeResource" -ConfigurationMode 'audit' } | Should -Throw "mock error"
         }
 
-    } 
+    }
 
     Context "when operating in different modes" {
 
@@ -154,17 +154,40 @@ Describe "Start-LCM Function Tests" -Tag Unit, MockedClass {
             $references.Clear()
         }
 
-        It "should operate in 'Test' mode by default" {
-            Mock -CommandName Invoke-DscResource -MockWith {
-                [PSCustomObject]@{ InDesiredState = $true; Message = "Tested successfully." }
-            }
+        It "Should apply no changes in 'Audit' mode when resource is in desired state" {
 
-            Start-LCM -FilePath "test.json" -DSCCompositeResourcePath "mock-path"
+            Mock -CommandName Invoke-DscResource -MockWith {
+                [PSCustomObject]@{ InDesiredState = $true; Message = "No action taken." }
+            } -ParameterFilter { $Method -eq "Test" }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Set" }
+
+            Start-LCM -FilePath "test.json" -ConfigurationMode "Audit" -DSCCompositeResourcePath "mock-path"
 
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Test" } -Exactly 1
+            Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Set" } -Exactly 0
+            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "*Resource is in the desired state:*" } -Exactly 1
+            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "No action taken as resource is already in the desired state*" } -Exactly 1
+            
         }
 
-        It "should apply changes in 'Set' mode" {
+        It "Should apply no changes in 'Audit' mode when resource is in not in the desired state" {
+
+            Mock -CommandName Invoke-DscResource -MockWith {
+                [PSCustomObject]@{ InDesiredState = $false; Message = "No action taken." }
+            } -ParameterFilter { $Method -eq "Test" }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Set" }
+
+            Start-LCM -FilePath "test.json" -ConfigurationMode "Audit" -DSCCompositeResourcePath "mock-path"
+
+            Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Test" } -Exactly 1
+            Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Set" } -Exactly 0
+            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "*Resource is NOT in the desired state*" } -Exactly 1
+            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "No action taken as ExecutionMode is 'Test'*" } -Exactly 1
+            
+        }
+
+
+        It "should apply changes in 'Enforce' mode" {
 
             Mock -CommandName Invoke-DscResource -MockWith {
                 if ($Script:TestDSCResourceCounter -eq 0) {
@@ -176,7 +199,7 @@ Describe "Start-LCM Function Tests" -Tag Unit, MockedClass {
             } -ParameterFilter { $Method -eq "Test" }
             Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Set" }
 
-            Start-LCM -FilePath "test.json" -Mode "Set" -DSCCompositeResourcePath "mock-path"
+            Start-LCM -FilePath "test.json" -ConfigurationMode "Enforce" -DSCCompositeResourcePath "mock-path"
 
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Test" } -Exactly 2
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Set" } -Exactly 1
@@ -184,7 +207,23 @@ Describe "Start-LCM Function Tests" -Tag Unit, MockedClass {
             
         }
 
-        It "should fail if a resource throws an error attempting to apply changes in 'Set' mode" {
+        It "should apply changes in 'Enforce' mode, but not check again if the change was successful" {
+
+            Mock -CommandName Invoke-DscResource -MockWith {
+                [PSCustomObject]@{ InDesiredState = $false; Message = "Resource set to desired state." }
+            } -ParameterFilter { $Method -eq "Test" }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Set" }
+
+            Start-LCM -FilePath "test.json" -ConfigurationMode "ApplyOnly" -DSCCompositeResourcePath "mock-path"
+
+            Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Test" } -Exactly 1
+            Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Set" } -Exactly 1
+            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "*Executed 'Set' method to make changes:*" } -Exactly 1
+            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "ConfigurationMode is 'ApplyOnly', applying changes without testing again*" } -Exactly 1
+            
+        }
+
+        It "should fail if a resource throws an error attempting to apply changes in 'Enforce' mode" {
             Mock -CommandName Write-Error
             Mock -CommandName Invoke-DscResource -MockWith {
                 [PSCustomObject]@{ InDesiredState = $false; Message = "Not in desired state." }
@@ -193,7 +232,7 @@ Describe "Start-LCM Function Tests" -Tag Unit, MockedClass {
                 throw "mock error"
             }
 
-            { Start-LCM -FilePath "test.json" -Mode "Set" -DSCCompositeResourcePath "mock-path" } | Should -Not -Throw
+            { Start-LCM -FilePath "test.json" -ConfigurationMode "Enforce" -DSCCompositeResourcePath "mock-path" } | Should -Not -Throw
             Assert-MockCalled -CommandName Write-Error -Times 1
 
         }
@@ -205,7 +244,7 @@ Describe "Start-LCM Function Tests" -Tag Unit, MockedClass {
             } -ParameterFilter { $Method -eq "Test" }
             Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Set" }
 
-            Start-LCM -FilePath "test.json" -Mode "Set" -DSCCompositeResourcePath "mock-path"
+            Start-LCM -FilePath "test.json" -ConfigurationMode "Enforce" -DSCCompositeResourcePath "mock-path"
 
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Test" } -Exactly 2
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Set" } -Exactly 1
@@ -246,11 +285,12 @@ Describe "Start-LCM Function Tests" -Tag Unit, MockedClass {
                 }
             }
 
-            Start-LCM -FilePath "test.json" -DSCCompositeResourcePath "mock-path"
+            Start-LCM -FilePath "test.json" -DSCCompositeResourcePath "mock-path" -ConfigurationMode "Enforce"
 
-            Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Test" } -Exactly 1
+            Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Test" } -Exactly 2
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Get" } -Exactly 1
             Assert-MockCalled -CommandName Write-Host -ParameterFilter { $Message -eq "Tasks Skipped: 1" } -Exactly 1
+            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "Skipping resource due to 'Stop-TaskProcessing' being called*" } -Exactly 1
 
         } 
 
@@ -286,7 +326,7 @@ Describe "Start-LCM Function Tests" -Tag Unit, MockedClass {
                 }
             }
 
-            Start-LCM -FilePath "test.json" -DSCCompositeResourcePath "mock-path"
+            Start-LCM -FilePath "test.json" -DSCCompositeResourcePath "mock-path" -ConfigurationMode "Enforce"
 
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Property.prop1 -eq "value1" } -Exactly 0
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Property.prop2 -eq "value2" } -Exactly 2
@@ -332,9 +372,9 @@ Describe "Start-LCM Function Tests" -Tag Unit, MockedClass {
 
             Mock -CommandName Write-Verbose
 
-            Start-LCM -FilePath "test.json" -Mode Set -DSCCompositeResourcePath "mock-path"
+            Start-LCM -FilePath "test.json" -DSCCompositeResourcePath "mock-path" -ConfigurationMode "Enforce"
 
-            Assert-MockCalled -CommandName Invoke-DscResource -Exactly 2
+            Assert-MockCalled -CommandName Invoke-DscResource -Exactly 3
             Assert-MockCalled -CommandName Write-Verbose -Exactly 0 -ParameterFilter { $Message -like "Using custom execution method: None" }
         }
 
@@ -368,7 +408,7 @@ Describe "Start-LCM Function Tests" -Tag Unit, MockedClass {
 
             Mock -CommandName Write-Verbose
 
-            Start-LCM -FilePath "test.json" -Mode Set -DSCCompositeResourcePath "mock-path"
+            Start-LCM -FilePath "test.json" -ConfigurationMode "Enforce" -DSCCompositeResourcePath "mock-path"
 
             Assert-MockCalled -CommandName Invoke-DscResource -Exactly 2
             Assert-MockCalled -CommandName Write-Verbose -Exactly 1 -ParameterFilter { $Message -eq "Using custom execution method: Test" }
@@ -404,13 +444,13 @@ Describe "Start-LCM Function Tests" -Tag Unit, MockedClass {
 
             Mock -CommandName Write-Verbose
 
-            Start-LCM -FilePath "test.json" -Mode Set -DSCCompositeResourcePath "mock-path"
+            Start-LCM -FilePath "test.json" -ConfigurationMode "Enforce" -DSCCompositeResourcePath "mock-path"
 
-            Assert-MockCalled -CommandName Invoke-DscResource -Exactly 2
+            Assert-MockCalled -CommandName Invoke-DscResource -Exactly 3
             Assert-MockCalled -CommandName Write-Verbose -Exactly 1 -ParameterFilter { $Message -eq "Using custom execution method: Set" }
         }
 
-    } 
+    }
 
     Context "when handling report paths" {
 
@@ -428,26 +468,22 @@ Describe "Start-LCM Function Tests" -Tag Unit, MockedClass {
         }
 
         It "should generate a report if ReportPath is specified" {
-            Mock -CommandName Export-Csv -MockWith {}
+            Mock -CommandName Export-Csv
 
-            Start-LCM -FilePath "test.json" -ReportPath "C:\Reports" -DSCCompositeResourcePath "mock-path" 
-            Assert-MockCalled -CommandName Export-Csv -Exactly 1
+            Start-LCM -FilePath "test.json" -ReportPath "C:\Reports" -DSCCompositeResourcePath "mock-path" -ConfigurationMode "Enforce"
+            Assert-MockCalled -CommandName Export-Csv -Times 1
         }
 
         It "should not generate a report if ReportPath is not specified" {
-            Mock -CommandName Export-Csv -MockWith {}
+            Mock -CommandName Export-Csv
 
-            Start-LCM -FilePath "test.json" -DSCCompositeResourcePath "mock-path"
+            Start-LCM -FilePath "test.json" -DSCCompositeResourcePath "mock-path" -ConfigurationMode "Enforce"
 
             Assert-MockCalled -CommandName Export-Csv -Exactly 0
         }
     } 
 
     Context "error handling and edge cases" {
-
-        It "should handle invalid Mode parameter" {
-            { Start-LCM -FilePath "test.json" -Mode "Invalid" -DSCCompositeResourcePath "mock-path" } | Should -Throw
-        }
 
         It "should print a non-terminating error when the LCM fails to set a resource" {
 
@@ -462,11 +498,11 @@ Describe "Start-LCM Function Tests" -Tag Unit, MockedClass {
             } -Verifiable
             Mock -CommandName Get-Content -MockWith { "---\nparameters: {}\nvariables: {}\nresources: []" }
 
-            { Start-LCM -FilePath "test.json" -Mode "Set" -DSCCompositeResourcePath "mock-path" } | Should -Not -Throw
+            { Start-LCM -FilePath "test.json" -ConfigurationMode "Enforce" -DSCCompositeResourcePath "mock-path" } | Should -Not -Throw
             Should -InvokeVerifiable
 
         }
-    } 
+    }
     
 }    
     

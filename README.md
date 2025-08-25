@@ -60,6 +60,49 @@ This LCM utilizes Datum from Gael Colas to streamline configuration. For more in
       DSCResourceVersion: 1.0
     ```
 
+1. __ConfigurationMode Change Windows__: Datum.yml includes settings that enable administrators to specify the ConfigurationMode and the associated change windows. Configuration Modes are:
+
+    - Audit: This mode allows for monitoring and reporting without making any changes to the system.
+    - Enforce: In this mode, the system actively applies the defined configurations, ensuring compliance.
+    - ApplyOnly: This mode applies the configurations but does not perform any auditing or enforcement actions.
+    - Scheduled: This mode allows configurations to be applied at specified times, providing flexibility in management.
+
+    Execution Precedence: The following hierarchy determines the order in which the `ConfigurationMode` is applied:
+
+    1. `Invoke-AZDoLCM -ConfigurationMode` Parameter. Setting this property will override the configuration.
+    1. `LCMConfigurationMode.LCMConfigurationMode`. Configuring this property will establish it as the default setting. The possible values are 'ApplyOnly', 'Audit', 'Enforce', and 'Scheduled'.
+    1. `LCMConfigurationMode.LCMConfigurationMode.ChangeWindows`. Setting up Change Windows will define the times in UTC when the LCM can operate in various modes. _If no change window is specified, it will revert to the default mode of 'Audit'. In cases of overlapping time windows, the first window will be chosen, and a warning will be issued._
+
+        ``` Text
+        [Get-LCMConfigurationMode] Current time 00:00 is within Change Window: 23:00 - 02:00. Setting LCM Configuration Mode to ApplyOnly.
+        [Get-LCMConfigurationMode] Overlapping Change Windows detected in Datum Configuration LCMConfigurationMode. The first matching window takes precedence.
+        ```
+
+        Change Window Syntax:
+
+        ```text
+        [ArrayList] ChangeWindows:
+            [String] StartTime: UTC StartTime
+            [String] EndTime: UTC EndTime
+            [String] ConfigurationMode: [Audit, Enforce, ApplyOnly]
+        ```
+
+      Example:
+
+      ```yaml
+      LCMConfigurationMode:
+          # The LCM Configuration Mode can be one of the following: ApplyOnly, Audit, Enforce, Scheduled
+          ConfigurationMode: Audit
+          # Define a Change Window Array that specifies when the configuration can be applied.
+          ChangeWindows:            
+              - StartTime: '20:00' # Start of the change window. Time is in UTC.
+              EndTime: '24:00' # End of the change window. Time is in UTC.
+              ConfigurationMode: Audit # The configuration mode for this change window.
+              - StartTime: '00:00'
+              EndTime: '02:00'
+              ConfigurationMode: Enforce
+      ```
+
 ### Enhanced LCM Resource Features
 
 The Local Configuration Manager (LCM) provides a set of features applicable to all Desired State Configuration (DSC) resources, enhancing their flexibility and control. These features include:
@@ -227,7 +270,7 @@ In the realm of configuration, there are specialized commands designed to modify
     ``` PowerShell
     #
     # Install Module Dependencies
-    Install-Module PSDesiredStateConfiguration, Datum, Datum.InvokeCommand -Force -Scope AllUsers -SkipPublisherCheck
+    Install-Module PSDesiredStateConfiguration, Datum, Datum.InvokeCommand, powershell-yaml -Force -Scope AllUsers -SkipPublisherCheck
     Write-Host "Installing Dependencies Modules"
 
     #
@@ -307,7 +350,9 @@ In the realm of configuration, there are specialized commands designed to modify
 
 1. __Setup the Azure DevOps Pipeline:__
 
-    __Template__:
+    __Template 1 - Classic__:
+
+    The classic template utilizes a pipeline approach to derive the ConfigurationMode:
 
     ``` YAML
       # Starter pipeline
@@ -332,9 +377,9 @@ In the realm of configuration, there are specialized commands designed to modify
       variables:
       - name: LCM_Method
         ${{ if eq(variables['Build.CronSchedule.DisplayName'], 'LCM Enforcement (Set)') }}:
-          value: 'Set'
+          value: 'Enforce'
         ${{ else }}:
-          value: 'Test'
+          value: 'Audit'
         readonly: true
 
       #container:
@@ -353,7 +398,49 @@ In the realm of configuration, there are specialized commands designed to modify
               exportConfigDir = 'C:\AzureDevOpsDSC\Configuration Export\'
               ConfigurationSourcePath = "$(build.sourcesDirectory)"
               JITToken = 'na'
-              Mode = "$(LCM_Method)"
+              ConfigurationMode = "$(LCM_Method)"
+              ReportPath = 'C:\AzureDevOpsDSC\Reporting\'
+            }
+            Invoke-AZDoLCM @params
+          displayName: Trigger the LCM
+          workingDirectory: "$(build.sourcesDirectory)"
+          errorActionPreference: continue
+    ```
+
+    __Template 2 - Updated__:
+
+    The classic template utilizes the internal datum configuration to derive the ConfigurationMode:
+
+    ``` YAML
+      # Starter pipeline
+      # Start with a minimal pipeline that you can customize to build and deploy your code.
+      # Add steps that build, run tests, deploy, and more:
+      # https://aka.ms/yaml
+
+      schedules: 
+        - cron: '0 05-20 * * 1-5'
+          displayName: Hourly LCM Check
+          always: true
+          branches:
+            include:
+            - master
+
+      #container:
+      pool:
+        name: azdo_dsc_lcm
+
+      steps:
+
+        - pwsh: |
+            Import-Module AzDO-DSC-LCM, AzureDevOpsDsc;
+            Write-Host "Source: $(build.sourcesDirectory)"
+            Write-Host "Method: $(LCM_Method)"
+
+            $params = @{
+              AzureDevopsOrganizationName = 'AzDoManagmentOrg'
+              exportConfigDir = 'C:\AzureDevOpsDSC\Configuration Export\'
+              ConfigurationSourcePath = "$(build.sourcesDirectory)"
+              JITToken = 'na'
               ReportPath = 'C:\AzureDevOpsDSC\Reporting\'
             }
             Invoke-AZDoLCM @params
@@ -364,8 +451,8 @@ In the realm of configuration, there are specialized commands designed to modify
 
     1. __Test to Ensure the LCM is Running Correctly:__
 
-    - __Set the LCM Mode to Test:__
-        - Switch the LCM to test mode to validate configuration changes without applying them immediately.
+    - __Set the LCM Mode to Audit:__
+        - Switch the LCM to Audit mode to validate configuration changes without applying them immediately.
     - __Look for Runtime Errors:__
         - Monitor logs and outputs for any runtime errors or warnings that could indicate misconfigurations or issues needing resolution.
     - __Verify Expected Outcomes:__

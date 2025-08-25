@@ -44,7 +44,7 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
         
         # Mock Sucessfull Configuration Application
         Mock -CommandName Invoke-DscResource -ParameterFilter {
-            $Method -eq 'Test'
+            $Method -eq 'Audit'
         } -MockWith { 
             return @{
                 InDesiredState = $true
@@ -55,7 +55,7 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
             AzureDevopsOrganizationName = 'mock-org'
             exportConfigDir = Join-Path $TestDrive -ChildPath 'Output'
             JITToken = 'mock'
-            ConfigurationMode = 'test'
+            ConfigurationMode = 'Audit'
             ConfigurationSourcePath = $null
         }
 
@@ -81,7 +81,7 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
         }
 
         AfterEach {
-            $params.ConfigurationMode = 'test'
+            $params.ConfigurationMode = 'Audit'
         }
 
         It "Should not throw any errors when using 'StandardResources' test case" {
@@ -199,14 +199,14 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
             $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\CustomExecutionMethod'
 
             #Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' } -MockWith { return @{} }
-            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Test' } -MockWith { return @{ InDesiredState = $true } }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Audit' } -MockWith { return @{ InDesiredState = $true } }
             Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' } 
             Mock -CommandName Write-Verbose
 
             Invoke-AZDoLCM @params 
 
             Assert-MockCalled -CommandName Write-Verbose -Times 1 -ParameterFilter { $Message -eq "Using custom execution method: Test" }
-            Assert-MockCalled -CommandName Invoke-DscResource -Times 2 -ParameterFilter { $Method -eq 'Test' }
+            Assert-MockCalled -CommandName Invoke-DscResource -Times 2 -ParameterFilter { $Method -eq 'Audit' }
             Assert-MockCalled -CommandName Invoke-DscResource -Exactly 0 -ParameterFilter { $Method -eq 'Set' }
 
         }
@@ -218,7 +218,7 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
             $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\CustomExecutionMethod#2'
 
             #Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' } -MockWith { return @{} }
-            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Test' } -MockWith { return @{ InDesiredState = $true } }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Audit' } -MockWith { return @{ InDesiredState = $true } }
             Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' } 
             Mock -CommandName Write-Verbose
 

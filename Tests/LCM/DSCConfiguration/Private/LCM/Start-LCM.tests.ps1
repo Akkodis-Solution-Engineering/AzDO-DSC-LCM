@@ -493,7 +493,7 @@ Describe "Start-LCM Function Tests" -Tag Unit, MockedClass {
             }
             Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Test' } -MockWith {
                 @{
-                    InDesiredState = $false 
+                    InDesiredState = $false
                 }
             } -Verifiable
             Mock -CommandName Get-Content -MockWith { "---\nparameters: {}\nvariables: {}\nresources: []" }
@@ -502,7 +502,160 @@ Describe "Start-LCM Function Tests" -Tag Unit, MockedClass {
             Should -InvokeVerifiable
 
         }
+
+        It "should stop all subsequent tasks when a Set fails and -ContinueOnError is NOT set" {
+
+            Mock -CommandName Load-Mock -MockWith {
+                return @{
+                    parameters = @{}
+                    variables  = @{}
+                    resources  = @(
+                        @{ type = "Module/Resource"; name = "Resource1"; properties = @{ p = 1 }; executionMethodOverride = 'None' }
+                        @{ type = "Module/Resource"; name = "Resource2"; properties = @{ p = 2 }; executionMethodOverride = 'None' }
+                    )
+                }
+            }
+
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Test' } -MockWith {
+                [PSCustomObject]@{ InDesiredState = $false; Message = "Not in desired state." }
+            }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' } -MockWith { throw "mock set error" }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Get' } -MockWith { @{} }
+            Mock -CommandName Write-Error
+
+            Start-LCM -FilePath "test.json" -ConfigurationMode "Enforce" -DSCCompositeResourcePath "mock-path"
+
+            # Resource1 fails Set → StopTaskProcessing → Resource2 is skipped
+            Assert-MockCalled -CommandName Write-Host -ParameterFilter { $Message -eq "Tasks Skipped: 1" } -Exactly 1
+            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "*Stopping all remaining task processing*" } -Exactly 1
+            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "Skipping resource due to 'Stop-TaskProcessing' being called*" } -Exactly 1
+
+        }
+
     }
-    
-}    
-    
+
+    Context "when using -ContinueOnError" {
+
+        BeforeEach {
+            $references.Clear()
+            $script:StopTaskProcessing = $false
+        }
+
+        It "should continue processing when Set fails and -ContinueOnError is set" {
+
+            Mock -CommandName Load-Mock -MockWith {
+                return @{
+                    parameters = @{}
+                    variables  = @{}
+                    resources  = @(
+                        @{ type = "Module/Resource"; name = "Resource1"; properties = @{ p = 1 }; executionMethodOverride = 'None' }
+                        @{ type = "Module/Resource"; name = "Resource2"; properties = @{ p = 2 }; executionMethodOverride = 'None' }
+                    )
+                }
+            }
+
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Test' } -MockWith {
+                [PSCustomObject]@{ InDesiredState = $false; Message = "Not in desired state." }
+            }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' } -MockWith { throw "mock set error" }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Get' } -MockWith { @{} }
+            Mock -CommandName Write-Error
+
+            Start-LCM -FilePath "test.json" -ConfigurationMode "Enforce" -DSCCompositeResourcePath "mock-path" -ContinueOnError
+
+            # Both resources attempted (Resource2 is not a dependent of Resource1)
+            Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Test' } -Exactly 2
+            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "*Continuing (ContinueOnError is set)*" } -Exactly 2
+
+        }
+
+        It "should skip dependent resources when their dependency fails and -ContinueOnError is set" {
+
+            Mock -CommandName Load-Mock -MockWith {
+                return @{
+                    parameters = @{}
+                    variables  = @{}
+                    resources  = @(
+                        @{
+                            type = "Module/Resource"; name = "Resource1"
+                            properties = @{ p = 1 }; executionMethodOverride = 'None'
+                        }
+                        @{
+                            type = "Module/Resource"; name = "Resource2"
+                            dependsOn = "Module/Resource/Resource1"
+                            properties = @{ p = 2 }; executionMethodOverride = 'None'
+                        }
+                        @{
+                            type = "Module/Resource"; name = "Resource3"
+                            properties = @{ p = 3 }; executionMethodOverride = 'None'
+                        }
+                    )
+                }
+            }
+
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Test' } -MockWith {
+                [PSCustomObject]@{ InDesiredState = $false; Message = "Not in desired state." }
+            }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' } -MockWith { throw "mock set error" }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Get' } -MockWith { @{} }
+            Mock -CommandName Write-Error
+
+            Start-LCM -FilePath "test.json" -ConfigurationMode "Enforce" -DSCCompositeResourcePath "mock-path" -ContinueOnError
+
+            # Resource2 (depends on Resource1) is SKIPPED; Resource3 (no dep on Resource1) continues
+            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter {
+                $Message -like "Skipping resource*dependency 'Resource1' failed*"
+            } -Exactly 1
+            Assert-MockCalled -CommandName Write-Host -ParameterFilter { $Message -eq "Tasks Skipped: 1" } -Exactly 1
+            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "*Continuing (ContinueOnError is set)*" } -AtLeast 1
+
+        }
+
+        It "should cascade dependency failure to transitive dependents" {
+
+            Mock -CommandName Load-Mock -MockWith {
+                return @{
+                    parameters = @{}
+                    variables  = @{}
+                    resources  = @(
+                        @{
+                            type = "Module/Resource"; name = "A"
+                            properties = @{ p = 1 }; executionMethodOverride = 'None'
+                        }
+                        @{
+                            type = "Module/Resource"; name = "B"
+                            dependsOn = "Module/Resource/A"
+                            properties = @{ p = 2 }; executionMethodOverride = 'None'
+                        }
+                        @{
+                            type = "Module/Resource"; name = "C"
+                            dependsOn = "Module/Resource/B"
+                            properties = @{ p = 3 }; executionMethodOverride = 'None'
+                        }
+                    )
+                }
+            }
+
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Test' } -MockWith {
+                [PSCustomObject]@{ InDesiredState = $false; Message = "Not in desired state." }
+            }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' } -MockWith { throw "mock set error" }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Get' } -MockWith { @{} }
+            Mock -CommandName Write-Error
+
+            Start-LCM -FilePath "test.json" -ConfigurationMode "Enforce" -DSCCompositeResourcePath "mock-path" -ContinueOnError
+
+            # A fails → B is SKIPPED (depends on A) → C is SKIPPED (depends on B, which is in failedResources)
+            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter {
+                $Message -like "Skipping resource*dependency 'A' failed*"
+            } -Exactly 1
+            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter {
+                $Message -like "Skipping resource*dependency 'B' failed*"
+            } -Exactly 1
+            Assert-MockCalled -CommandName Write-Host -ParameterFilter { $Message -eq "Tasks Skipped: 2" } -Exactly 1
+
+        }
+
+    }
+
+}

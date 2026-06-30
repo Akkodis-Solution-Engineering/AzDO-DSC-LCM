@@ -36,6 +36,14 @@ Describe "Invoke-AZDoLCM Function Tests" -Tag Unit {
         }
         Mock -CommandName Test-Path -MockWith { return $true }
 
+        # Invoke-AZDoLCM now always reads and validates datum.yml — mock these globally
+        # so unit tests remain focused on Invoke-AZDoLCM logic rather than datum validation
+        Mock -CommandName Get-Content -MockWith { return "MOCKED DATUM CONTENT" }
+        Mock -CommandName ConvertFrom-Yaml -MockWith {
+            return @{ LCMConfigurationMode = @{ ConfigurationMode = 'Audit'; ChangeWindows = @() } }
+        }
+        Mock -CommandName Test-DatumConfiguration
+
         $exportConfigDir = New-MockDirectoryPath
         $ConfigurationSourcePath = New-MockDirectoryPath
 

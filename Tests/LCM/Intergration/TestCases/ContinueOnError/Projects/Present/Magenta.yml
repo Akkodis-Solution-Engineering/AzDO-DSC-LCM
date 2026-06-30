@@ -1,0 +1,6 @@
+
+parameters: {}
+
+variables: {
+  ProjectDescription: 'ContinueOnError Test Project.'
+}

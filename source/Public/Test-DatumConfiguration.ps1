@@ -65,15 +65,24 @@ function Test-DatumConfiguration {
             throw "[Test-DatumConfiguration] The ConfigurationMode property in each ChangeWindow of the Datum Configuration LCMConfigurationMode must be one of the allowed values: $($allowedChangeWindowConfigurationModes -join ', '). The Datum Configuration is invalid and cannot be processed."
         }
         # Validate that Start and End are time strings are in the correct 24-hour format.
-        if (-not $ChangeWindow.StartTime -match '^\d{2}:\d{2}$' -or -not $ChangeWindow.EndTime -match '^\d{2}:\d{2}$') {
+        if (-not ($ChangeWindow.StartTime -match '^\d{2}:\d{2}$') -or -not ($ChangeWindow.EndTime -match '^\d{2}:\d{2}$')) {
             throw "[Test-DatumConfiguration] The StartTime and EndTime properties in the ChangeWindow must be in the format HH:mm (24-hour format). The Datum Configuration is invalid and cannot be processed."
         }
         # Ensure that the StartTime and EndTime are in 24-hour format.
         try {
-            $startTime = [datetime]::ParseExact($ChangeWindow.StartTime, "HH:mm", $null)
-            $endTime = [datetime]::ParseExact($ChangeWindow.EndTime, "HH:mm", $null)
+            $null = [datetime]::ParseExact($ChangeWindow.StartTime, "HH:mm", $null)
+            $null = [datetime]::ParseExact($ChangeWindow.EndTime, "HH:mm", $null)
         } catch {
             throw "[Test-DatumConfiguration] The StartTime and EndTime properties in the ChangeWindow must be valid time strings in the format HH:mm (24-hour format). The Datum Configuration is invalid and cannot be processed."
+        }
+        # Validate DaysOfWeek if the optional property is present.
+        $validDays = @('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday')
+        if ($null -ne $ChangeWindow.DaysOfWeek -and $ChangeWindow.DaysOfWeek.Count -gt 0) {
+            foreach ($day in $ChangeWindow.DaysOfWeek) {
+                if ($validDays -inotcontains $day) {
+                    throw "[Test-DatumConfiguration] Invalid DaysOfWeek value '$day' in ChangeWindow. Valid values are: $($validDays -join ', '). The Datum Configuration is invalid and cannot be processed."
+                }
+            }
         }
     }
     
@@ -102,14 +111,16 @@ function Test-DatumConfiguration {
 
     # Get the Datum Configuration Version
     $LCMConfiguration = @{
-        DatumConfigurationVersion   = $Datum.__Definition.LCMConfigSettings.ConfigurationVersion -as [Version]
-        AZDOLCMVersion              = $Datum.__Definition.LCMConfigSettings.AZDOLCMVersion -as [Version]
+        DatumConfigurationVersion       = $Datum.__Definition.LCMConfigSettings.ConfigurationVersion -as [Version]
+        AZDOLCMVersion                  = $Datum.__Definition.LCMConfigSettings.AZDOLCMVersion -as [Version]
         YAMLConfigurationMinimumVersion = $ModuleConfigurationData.YAMLConfigurationMinimumVersion -as [Version]
         YAMLConfigurationMaximumVersion = $ModuleConfigurationData.YAMLConfigurationMaximumVersion -as [Version]
+        AZDOLCMMinimumVersion           = $ModuleConfigurationData.AZDOLCMMinimumVersion -as [Version]
+        AZDOLCMMaximumVersion           = $ModuleConfigurationData.AZDOLCMMaximumVersion -as [Version]
+        CurrentAZDOLCMVersion           = (Get-Module azdo-dsc-lcm | Select-Object -First 1).Version
     }
 
     $CurrentPSDesiredStateConfigurationVersion = (Get-Module PSDesiredStateConfiguration | Select-Object -First 1).Version
-    $CurrentAZDOLCMVersion = (Get-Module azdo-dsc-lcm | Select-Object -First 1).Version
 
     Write-Verbose "[Test-DatumConfiguration] Datum Configuration Version: $($LCMConfiguration.DatumConfigurationVersion)"
 

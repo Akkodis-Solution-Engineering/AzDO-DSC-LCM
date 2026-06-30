@@ -1,0 +1,40 @@
+
+parameters: {}
+
+variables: {
+  ProjectName: '[x={ $Node.Project }=]',
+  Project_Ensure: '[x={ $Node.ProjectPresence }=]'
+}
+
+resources:
+
+  # Listed first in YAML so Sort-DependsOn places it last after the independent resources
+  - name: DependentOnProject
+    type: AzureDevOpsDsc/AzDoProjectServices
+    dependsOn:
+      - AzureDevOpsDsc/AzDoProject/Project
+    properties:
+      projectName: $ProjectName
+
+  # Depends on IndependentResource (not on Project) — should continue when Project fails
+  - name: DependentOnIndependent
+    type: AzureDevOpsDsc/AzDoGitPermission
+    dependsOn:
+      - AzureDevOpsDsc/AzDoGitRepository/IndependentResource
+    properties:
+      projectName: $ProjectName
+      RepositoryName: MockRepo
+
+  # Listed second-to-last in YAML — ends up second in sorted order (after IndependentResource)
+  - name: Project
+    type: AzureDevOpsDsc/AzDoProject
+    properties:
+      projectName: $ProjectName
+      Ensure: Present
+
+  # Listed last in YAML — ends up first in sorted order (no dependencies, Insert(0) reversal)
+  - name: IndependentResource
+    type: AzureDevOpsDsc/AzDoGitRepository
+    properties:
+      ProjectName: $ProjectName
+      RepositoryName: MockRepository

@@ -91,7 +91,12 @@ function Invoke-AzDoLCM {
         # It includes a validation script to ensure the provided path points to a file (leaf) and not a directory.
         [Parameter()]
         [ValidateScript({Test-Path -Path $_ -PathType Container})]
-        [String]$ReportPath
+        [String]$ReportPath,
+
+        # When specified, a resource Set failure does not halt the LCM run. Instead, resources that directly
+        # or transitively depend on the failed resource are automatically skipped; all others continue normally.
+        [Parameter()]
+        [Switch]$ContinueOnError
 
     )
 
@@ -142,11 +147,16 @@ function Invoke-AzDoLCM {
     #}
 
     #
+    # Read and validate the Datum Configuration
+
+    $DatumConfiguration = Get-Content -Path (Join-Path $DatumConfigurationPath 'datum.yml') | ConvertFrom-Yaml
+    Test-DatumConfiguration -Datum @{ '__Definition' = $DatumConfiguration }
+
+    #
     # Determine the LCM Configuration Mode
 
     # If the ConfigurationMode parameter is provided, use it. Otherwise, determine the mode from the Datum Configuration.
     if (-not $ConfigurationMode) {
-        $DatumConfiguration = Get-Content -Path (Join-Path $DatumConfigurationPath 'datum.yml') | ConvertFrom-Yaml
         $ConfigurationMode = Get-LCMConfigurationMode -DatumConfigurationMode $DatumConfiguration.LCMConfigurationMode
     }
 
@@ -164,7 +174,12 @@ function Invoke-AzDoLCM {
         $params.ReportPath = $ReportPath
     }
 
-    Get-ChildItem -LiteralPath $exportConfigDir -File -Filter "*.yml" | ForEach-Object { 
+    # Pass ContinueOnError through to each LCM run
+    if ($ContinueOnError) {
+        $params.ContinueOnError = $true
+    }
+
+    Get-ChildItem -LiteralPath $exportConfigDir -File -Filter "*.yml" | ForEach-Object {
         Start-LCM -FilePath $_.Fullname @params
     }
 

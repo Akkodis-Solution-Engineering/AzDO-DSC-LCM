@@ -3,18 +3,23 @@
 Invokes the Desired State Configuration (DSC) based on a provided configuration file.
 
 .DESCRIPTION
-The Start-LCM function processes a DSC configuration file (YAML or JSON) and executes the tasks defined within it. 
+The Start-LCM function processes a DSC configuration file (YAML or JSON) and executes the tasks defined within it.
 It supports both 'Test' and 'Set' modes to either validate the current state or apply changes to achieve the desired state.
 
 .PARAMETER FilePath
 The path to the configuration file (.yaml/.yml or .json).
 
 .PARAMETER Mode
-Specifies the mode of operation. Valid values are 'Test' (default) and 'Set'. 
+Specifies the mode of operation. Valid values are 'Test' (default) and 'Set'.
 'Test' mode validates the current state, while 'Set' mode applies changes to achieve the desired state.
 
 .PARAMETER ReportPath
 Optional parameter to specify a path for saving the report. If provided, the report will be saved as a CSV file at the specified location.
+
+.PARAMETER ContinueOnError
+When specified, a resource failure does not stop processing. Resources that directly or transitively
+depend on the failed resource are automatically marked as failed; all other resources continue to run.
+Without this switch, the first Set failure halts all subsequent task processing.
 
 .EXAMPLE
 Start-LCM -FilePath "C:\Configs\MyConfig.yaml" -Mode "Test"
@@ -23,6 +28,10 @@ Invokes the DSC configuration in 'Test' mode using the specified YAML configurat
 .EXAMPLE
 Start-LCM -FilePath "C:\Configs\MyConfig.json" -Mode "Set" -ReportPath "C:\Reports"
 Invokes the DSC configuration in 'Set' mode using the specified JSON configuration file and saves the report to the specified path.
+
+.EXAMPLE
+Start-LCM -FilePath "C:\Configs\MyConfig.yaml" -ConfigurationMode "Enforce" -ContinueOnError -DSCCompositeResourcePath "C:\Composite"
+Runs in Enforce mode; if a resource fails its Set operation, dependent resources are skipped but independent resources continue.
 
 .NOTES
 - The function supports both YAML and JSON configuration files.
@@ -42,13 +51,17 @@ function Start-LCM {
         [string] $ConfigurationMode, # The mode of operation for the LCM (e.g., ApplyOnly, Audit, Enforce, Scheduled)
         [string] $ReportPath = $null, # Optional parameter for specifying a report path
         [Parameter(Mandatory = $true)]
-        [string] $DSCCompositeResourcePath
+        [string] $DSCCompositeResourcePath,
+        [switch] $ContinueOnError # When set, failed resources cascade to dependents but non-dependents continue
     )
 
     # Clear StopTaskProcessing variable
     $script:StopTaskProcessing = $false
     $references.Clear()
-    
+
+    # Track resource names that have failed (used when -ContinueOnError is active)
+    $failedResources = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+
     $Mode = $( switch ($ConfigurationMode) {
         "ApplyOnly" { "Set" }
         "Audit" { "Test" }
@@ -62,24 +75,26 @@ function Start-LCM {
 
     $pipeline = [DSCConfigurationFile]::New($FilePath, $DSCCompositeResourcePath)
 
-    Write-Host "--> Merging Partial Resources with Parents"
+    $configName = (Split-Path -Leaf $FilePath) -replace '\.(yml|yaml|json)$', ''
+    Write-Host ""
+    Write-Host "  LCM: $configName   [Mode: $ConfigurationMode]" -ForegroundColor Cyan
+    Write-Host "  $('-' * 60)" -ForegroundColor DarkGray
+    Write-Host "  Merging partial resources..." -ForegroundColor Gray
 
     $tasks = Invoke-CustomTask -Tasks $pipeline.resources -CustomTaskName "Merge-StubResources"
 
-    Write-Host "--> Sorting tasks based on dependencies:" -ForegroundColor Green
+    Write-Host "  Sorting by dependency order..." -ForegroundColor Gray
 
     # Sort the tasks based on their dependencies to ensure correct execution order
     $tasks = Invoke-CustomTask -Tasks $Tasks -CustomTaskName "Sort-DependsOn"
     Write-Verbose "Sorted tasks based on dependencies"
 
-    # Invoke the PreParse the rules to process the tasks before formatting them
-    Write-Host "--> Processing PreParse Rules:" -ForegroundColor Green
+    Write-Host "  Applying pre-parse rules..." -ForegroundColor Gray
 
-    # Invoke the PreParse the rules to process the tasks before formatting them 
+    # Invoke the PreParse the rules to process the tasks before formatting them
     Invoke-PreParseRules -Tasks $Tasks
-    
-    # Invoke the Format Tasks Rules
-    Write-Host "--> Processing Formatting Tasks:" -ForegroundColor Green
+
+    Write-Host "  Formatting tasks..." -ForegroundColor Gray
 
     # Format the tasks based on the configuration rules
     $tasks = Invoke-FormatTasks -Tasks $tasks
@@ -113,9 +128,36 @@ function Start-LCM {
             continue
         }
 
+        # When -ContinueOnError is active, check if any dependency has already failed.
+        # If so, cascade the failure to this resource and skip it.
+        if ($ContinueOnError -and -not [string]::IsNullOrEmpty($task.dependsOn)) {
+
+            $dependencyNames = @($task.dependsOn) | ForEach-Object {
+                $parts = $_.Split('/')
+                $parts[2..$parts.Length] -join '/'
+            }
+
+            $failedDep = $dependencyNames | Where-Object { $failedResources.Contains($_) } | Select-Object -First 1
+
+            if ($null -ne $failedDep) {
+                Write-Verbose "Skipping resource [$($task.type)/$($task.name)] - dependency '$failedDep' failed."
+                $null = $reporting.Add([PSCustomObject]@{
+                    Counter = $TaskCounter
+                    Name    = $task.name
+                    Type    = $task.type
+                    Status  = "Skipped"
+                    Method  = 'TEST'
+                    Result  = "SKIPPED"
+                    Message = "Resource skipped because dependency '$failedDep' failed."
+                })
+                $null = $failedResources.Add($task.name)
+                continue
+            }
+        }
+
         # Evaluate the Condition script block if it exists, and skip the task if the condition returns false
         if ($null -ne $task.Condition) {
-            
+
             # Create a script block from th econdition property
             $sbCondition = [scriptblock]::Create($task.Condition)
 
@@ -143,7 +185,7 @@ function Start-LCM {
         $module = $task.type.Split("/")[0]
         $resourceType = $task.type.Split("/")[1]
         Write-Verbose "Extracted module name: $module and resource type: $resourceType"
-        
+
         # Replace any variables in the properties with their actual values
         $Property = Expand-HashTable -InputHashTable $task.properties
 
@@ -220,7 +262,7 @@ function Start-LCM {
                 })
             }
         }
-    
+
         # If the task is in 'Continue' state, however the configuration mode is 'ApplyOnly' or 'Enforce', handle the execution accordingly
         if (($CurrentTaskState -eq 'Continue') -and ($ConfigurationMode -eq "ApplyOnly") -and ($ExecutionMode -eq "Set")) {
 
@@ -273,7 +315,7 @@ function Start-LCM {
                 Result      = $Result
                 Message     = $Message
             })
-            
+
         }
 
         #
@@ -287,13 +329,24 @@ function Start-LCM {
         }
 
         # Execute the 'Get' method to retrieve the current state of the resource
-        $resourceParameters.Method = 'get'   
+        $resourceParameters.Method = 'get'
         $output_var = Invoke-DscResource @resourceParameters
         Write-Verbose "Retrieved current state with 'Get' method for DSC resource: [$($task.type)/$($task.name)]"
 
         # Store the output of the 'Get' operation in a reference table for later use
         $references.Add($task.name, $output_var)
         Write-Verbose "Stored output of 'Get' operation in references table for resource: [$($task.type)/$($task.name)]"
+
+        # Handle task failure: either stop all processing or track the failure for dependency cascading
+        if ($CurrentTaskState -eq 'Stop') {
+            if ($ContinueOnError) {
+                $null = $failedResources.Add($task.name)
+                Write-Verbose "Resource [$($task.type)/$($task.name)] failed. Continuing (ContinueOnError is set). Dependent resources will be skipped."
+            } else {
+                Write-Verbose "Resource [$($task.type)/$($task.name)] failed. Stopping all remaining task processing."
+                $script:StopTaskProcessing = $true
+            }
+        }
 
     }
 
@@ -310,7 +363,7 @@ function Start-LCM {
 
     # If the reporting path is specified, print the report to the console and save it to the specified path
     if ($ReportPath) {
-        
+
         Write-Verbose "[Start-LCM] FilePath $FilePath"
 
         # Construct the full path for the report file
@@ -321,24 +374,20 @@ function Start-LCM {
 
     }
 
-    # Print the output of the report to the console.
-    
-    Write-Host "DSC Configuration Report: $FilePath" -ForegroundColor Green
-    Write-Host "Results Summary:" -ForegroundColor Green
+    # Print the results table to the console.
+
+    Write-Host ""
+    Write-Host "  Results:" -ForegroundColor White
+    Write-Host "  $('-' * 60)" -ForegroundColor DarkGray
 
     # Iterate through the grouped report data and display the results
     foreach ($GroupReport in $reportSummary) {
 
-        # Test the status of the task and set the colour accordingly
-
-        # If the count is greater than 1, then the task has been executed multiple times meaning it has failed the test
-        # but could of passed the set
         $Counter = $GroupReport.Group.Counter | Select-Object -First 1
 
         if ($GroupReport.Count -gt 1) {
 
-            # Filter the results to see if the task has set the resource to the desired state
-            $setResult = $GroupReport.Group | Where-Object { ($_.Method -eq 'SET') }
+            $setResult = $GroupReport.Group | Where-Object { $_.Method -eq 'SET' }
 
             if ($setResult.Result -contains "PASS") {
                 $Colour = "Green"
@@ -349,9 +398,6 @@ function Start-LCM {
                 $Result = "FAIL"
                 $FailCounter++
             }
-
-        #
-        # If the count is less than 1, then the task has only been executed once, meaning the test functionality has been tested.
 
         } else {
             if ($GroupReport.Group.Result -contains "PASS") {
@@ -371,18 +417,19 @@ function Start-LCM {
                 $Result = "UNKNOWN"
             }
         }
-        
-        # Print the task name and result with the appropriate colour
-        Write-Host "[$($Counter)]    Task: $($GroupReport.Name) - Result: [$($Result)]" -ForegroundColor $Colour
+
+        $counterLabel = "[$($Counter.ToString().PadLeft(2))]"
+        $resultLabel  = $Result.PadRight(8)
+        Write-Host "  $counterLabel  $resultLabel  $($GroupReport.Name)" -ForegroundColor $Colour
     }
 
-    $OutputColour = ($FailCounter -eq 0) ? "Green" : "Red" 
+    $OutputColour = ($FailCounter -eq 0) ? "Green" : "Red"
 
-    # Print the total number of tasks executed
+    Write-Host "  $('-' * 60)" -ForegroundColor DarkGray
     Write-Host "Total Tasks Executed: $($reportSummary.Count)" -ForegroundColor $OutputColour
     Write-Host "Tasks Passed:  $PassCounter" -ForegroundColor $OutputColour
     Write-Host "Tasks Failed:  $FailCounter" -ForegroundColor $OutputColour
     Write-Host "Tasks Skipped: $SkippedCounter" -ForegroundColor $OutputColour
-    Write-Host "Total Tasks: $($reportSummary.Count)" -ForegroundColor $OutputColour
+    Write-Host ""
 
 }

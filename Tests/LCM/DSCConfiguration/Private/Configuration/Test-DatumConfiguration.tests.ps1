@@ -44,12 +44,14 @@ Describe "Test-DatumConfiguration Function Tests" -Tag Unit, LCM, Configuration 
             }
 
             $ModuleConfigurationData = @{
-                YAMLConfigurationMinimumVersion = "0.9.0"
-                YAMLConfigurationMaximumVersion = "2.0.0"
+                YAMLConfigurationMinimumVersion           = "0.9.0"
+                YAMLConfigurationMaximumVersion           = "2.0.0"
                 PSDesiredStateConfigurationMinimumVersion = "1.0.0"
                 PSDesiredStateConfigurationMaximumVersion = "2.0.0"
-                DSCResourceMinimumVersion = "1.0.0"
-                DSCResourceMaximumVersion = "2.0.0"
+                DSCResourceMinimumVersion                 = "1.0.0"
+                DSCResourceMaximumVersion                 = "2.0.0"
+                AZDOLCMMinimumVersion                     = "0.1.0"
+                AZDOLCMMaximumVersion                     = "1.9.0"
             }
 
             { Test-DatumConfiguration -Datum $datumConfig } | Should -Not -Throw
@@ -85,8 +87,14 @@ Describe "Test-DatumConfiguration Function Tests" -Tag Unit, LCM, Configuration 
                 }
             }
             $ModuleConfigurationData = @{
-                YAMLConfigurationMinimumVersion = "0.9.0"
-                YAMLConfigurationMaximumVersion = "2.0.0"
+                YAMLConfigurationMinimumVersion           = "0.9.0"
+                YAMLConfigurationMaximumVersion           = "2.0.0"
+                PSDesiredStateConfigurationMinimumVersion = "1.0.0"
+                PSDesiredStateConfigurationMaximumVersion = "2.0.0"
+                DSCResourceMinimumVersion                 = "1.0.0"
+                DSCResourceMaximumVersion                 = "2.0.0"
+                AZDOLCMMinimumVersion                     = "0.1.0"
+                AZDOLCMMaximumVersion                     = "1.9.0"
             }
             { Test-DatumConfiguration -Datum $datumConfig } | Should -Throw -ErrorId "*valid version*"
             Assert-MockCalled Write-Warning -Exactly 0
@@ -108,8 +116,14 @@ Describe "Test-DatumConfiguration Function Tests" -Tag Unit, LCM, Configuration 
             }
 
             $ModuleConfigurationData = @{
-                YAMLConfigurationMinimumVersion = "0.9.0"
-                YAMLConfigurationMaximumVersion = "2.0.0"
+                YAMLConfigurationMinimumVersion           = "0.9.0"
+                YAMLConfigurationMaximumVersion           = "2.0.0"
+                PSDesiredStateConfigurationMinimumVersion = "1.0.0"
+                PSDesiredStateConfigurationMaximumVersion = "2.0.0"
+                DSCResourceMinimumVersion                 = "1.0.0"
+                DSCResourceMaximumVersion                 = "2.0.0"
+                AZDOLCMMinimumVersion                     = "0.1.0"
+                AZDOLCMMaximumVersion                     = "1.9.0"
             }
             { Test-DatumConfiguration -Datum $datumConfig } | Should -Throw -ErrorId "*outside the valid range*"
             Assert-MockCalled Write-Warning -Exactly 0
@@ -132,12 +146,14 @@ Describe "Test-DatumConfiguration Function Tests" -Tag Unit, LCM, Configuration 
             }
 
             $ModuleConfigurationData = @{
-                YAMLConfigurationMinimumVersion = "0.9.0"
-                YAMLConfigurationMaximumVersion = "2.0.0"
+                YAMLConfigurationMinimumVersion           = "0.9.0"
+                YAMLConfigurationMaximumVersion           = "2.0.0"
                 PSDesiredStateConfigurationMinimumVersion = "1.0.0"
                 PSDesiredStateConfigurationMaximumVersion = "2.0.0"
-                DSCResourceMinimumVersion = "1.0.0"
-                DSCResourceMaximumVersion = "2.0.0"
+                DSCResourceMinimumVersion                 = "1.0.0"
+                DSCResourceMaximumVersion                 = "2.0.0"
+                AZDOLCMMinimumVersion                     = "0.1.0"
+                AZDOLCMMaximumVersion                     = "1.9.0"
             }
 
             Test-DatumConfiguration -Datum $datumConfig
@@ -164,12 +180,14 @@ Describe "Test-DatumConfiguration Function Tests" -Tag Unit, LCM, Configuration 
             }
 
             $ModuleConfigurationData = @{
-                YAMLConfigurationMinimumVersion = "0.9.0"
-                YAMLConfigurationMaximumVersion = "2.0.0"
+                YAMLConfigurationMinimumVersion           = "0.9.0"
+                YAMLConfigurationMaximumVersion           = "2.0.0"
                 PSDesiredStateConfigurationMinimumVersion = "1.0.0"
                 PSDesiredStateConfigurationMaximumVersion = "2.0.0"
-                DSCResourceMinimumVersion = "1.0.0"
-                DSCResourceMaximumVersion = "2.0.0"
+                DSCResourceMinimumVersion                 = "1.0.0"
+                DSCResourceMaximumVersion                 = "2.0.0"
+                AZDOLCMMinimumVersion                     = "0.1.0"
+                AZDOLCMMaximumVersion                     = "1.9.0"
             }
 
             Test-DatumConfiguration -Datum $datumConfig
@@ -182,14 +200,15 @@ Describe "Test-DatumConfiguration Function Tests" -Tag Unit, LCM, Configuration 
 
         BeforeAll {
             $ModuleConfigurationData = @{
-                YAMLConfigurationMinimumVersion = "0.9.0"
-                YAMLConfigurationMaximumVersion = "2.0.0"
+                YAMLConfigurationMinimumVersion           = "0.9.0"
+                YAMLConfigurationMaximumVersion           = "2.0.0"
                 PSDesiredStateConfigurationMinimumVersion = "1.0.0"
                 PSDesiredStateConfigurationMaximumVersion = "2.0.0"
-                DSCResourceMinimumVersion = "1.0.0"
-                DSCResourceMaximumVersion = "2.0.0"
+                DSCResourceMinimumVersion                 = "1.0.0"
+                DSCResourceMaximumVersion                 = "2.0.0"
+                AZDOLCMMinimumVersion                     = "0.1.0"
+                AZDOLCMMaximumVersion                     = "1.9.0"
             }
-
         }
 
         It "should pass without errors" {

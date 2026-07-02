@@ -10,7 +10,12 @@
 
 ## Overview
 
-`AzDO-DSC-LCM` is the Local Configuration Manager (LCM) component for the `AzureDevOpsDsc` DSC Module. This module helps manage Azure DevOps resources through Desired State Configuration (DSC). Utilizes Datum to merge configuration stubs into larger pieces of configuration which is parsed into the LCM.
+`AzDO-DSC-LCM` is a Local Configuration Manager (LCM) for Desired State Configuration (DSC). Its execution engine is resource-agnostic — it invokes whatever DSC resource module a compiled configuration's `type:` fields reference, so it isn't limited to the `AzureDevOpsDsc` DSC Module. It utilizes Datum to merge configuration stubs into larger pieces of configuration which is parsed into the LCM.
+
+Two public entry points build on this same engine:
+
+- `Invoke-AZDoLCM`: the Azure DevOps-flavored entry point. Authenticates to Azure DevOps (Managed Identity or PAT) and is the recommended choice for configurations that manage `AzureDevOpsDsc` resources.
+- `Invoke-DscLCM`: a generic entry point with no Azure DevOps dependency at all — no `AzureDevOpsDsc`/`AzureDevOpsDsc.Common` install required. Use this if your configuration targets other DSC resource modules; authenticate to whatever those resources require using their own mechanism before calling it. See [Using Invoke-DscLCM Directly (Non-Azure DevOps Consumers)](#using-invoke-dsclcm-directly-non-azure-devops-consumers) for details.
 
 ## Datum
 

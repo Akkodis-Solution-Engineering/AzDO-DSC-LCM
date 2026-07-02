@@ -140,7 +140,10 @@ The Local Configuration Manager (LCM) provides a set of features applicable to a
         - AzureDevOpsDsc/AzDoProjectGroup/CON Board Administrators
     ```
 
-- __executionMethodOverride__: This feature provides the capability to customize and override the default execution method used by the Local Configuration Manager (LCM). By allowing users to specify an alternative execution method, it enhances flexibility and control over how configurations are applied. This is particularly beneficial in scenarios where specific execution requirements are necessary, enabling tailored solutions that better meet the needs of diverse environments and use cases. Values are 'none', 'test' and 'set'. Setting the value to 'none' is equivalent to leaving the property unset.
+- __executionMethodOverride__: This feature lets a single resource pin its own execution method, overriding whatever `ConfigurationMode` the LCM run is otherwise using for every other resource. The resource is still `Test`-ed first as normal; the override only changes what happens when that `Test` reports the resource is not in the desired state. Values are 'none', 'test' and 'set'. Setting the value to 'none' (the default) means the resource simply follows the run's overall mode, with no special treatment.
+
+    - `executionMethodOverride: test` pins the resource to test-only, even during an `ApplyOnly` or `Enforce` run. Use this to exempt a specific resource from being changed while the rest of the configuration is enforced.
+    - `executionMethodOverride: set` pins the resource to always apply changes, even during an `Audit` run. Use this to force a specific resource to self-heal every run regardless of the configured mode.
 
     __Syntax:__
     executionMethodOverride: ['none', 'test', 'set']
@@ -151,7 +154,15 @@ The Local Configuration Manager (LCM) provides a set of features applicable to a
     - name: Default Git Configuration Permissions
       type: AzureDevOpsDsc/AzDoGitPermission
       executionMethodOverride: test
-    ```    
+      # Even if this run's ConfigurationMode is 'Enforce', this resource will only ever be tested, never set.
+    ```
+
+    ```yaml
+    - name: Default Git Configuration Permissions
+      type: AzureDevOpsDsc/AzDoGitPermission
+      executionMethodOverride: set
+      # Even if this run's ConfigurationMode is 'Audit', this resource will still be applied if it drifts.
+    ```
 
 These features collectively enhance the robustness and adaptability of DSC resources managed by the LCM, allowing for more precise and context-sensitive configuration management.
 

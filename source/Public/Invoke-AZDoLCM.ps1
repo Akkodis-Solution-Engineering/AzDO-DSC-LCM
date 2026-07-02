@@ -17,8 +17,8 @@ Specifies the URL or directory path for the configuration source. This parameter
 .PARAMETER JITToken
 Specifies the Just-In-Time (JIT) access token. This parameter is mandatory.
 
-.PARAMETER Mode
-Specifies the mode of operation. Valid values are 'Test' and 'Set'. The default value is 'Test'.
+.PARAMETER ConfigurationMode
+Specifies the Local Configuration Manager (LCM) mode to use. Valid values are 'ApplyOnly', 'Audit', and 'Enforce'. This parameter is optional; if not provided, the mode will be determined from the Datum configuration.
 
 .PARAMETER AuthenticationType
 Specifies the authentication type to use. Valid values are 'ManagedIdentity' and 'PAT'. The default value is 'ManagedIdentity'.
@@ -68,10 +68,11 @@ function Invoke-AzDoLCM {
 
         # Declares an optional parameter with a ValidateSet attribute to restrict the value to either 'Test' or 'Set'.
         # The default value for this parameter is 'Set'.
-        [Parameter(Mandatory, ParameterSetName='Default')]
-        [Parameter(Mandatory, ParameterSetName='PAT')]
-        [ValidateSet('Test', 'Set')]
-        [String]$Mode='Test',
+        [Parameter(ParameterSetName='Default')]
+        [Parameter(ParameterSetName='PAT')]
+        [ValidateSet("ApplyOnly", "Audit", "Enforce")]
+        [AllowEmptyString()]
+        [String]$ConfigurationMode,
 
         # Declare the AuthenticationType parameter with a ValidateSet attribute to restrict the value to 'ManagedIdentity' or 'PAT'.
         # The default value for this parameter is 'ManagedIdentity'.
@@ -90,7 +91,12 @@ function Invoke-AzDoLCM {
         # It includes a validation script to ensure the provided path points to a file (leaf) and not a directory.
         [Parameter()]
         [ValidateScript({Test-Path -Path $_ -PathType Container})]
-        [String]$ReportPath
+        [String]$ReportPath,
+
+        # When specified, a resource Set failure does not halt the LCM run. Instead, resources that directly
+        # or transitively depend on the failed resource are automatically skipped; all others continue normally.
+        [Parameter()]
+        [Switch]$ContinueOnError
 
     )
 
@@ -141,11 +147,25 @@ function Invoke-AzDoLCM {
     #}
 
     #
+    # Read and validate the Datum Configuration
+
+    $DatumConfiguration = Get-Content -Path (Join-Path $DatumConfigurationPath 'datum.yml') | ConvertFrom-Yaml
+    Test-DatumConfiguration -Datum @{ '__Definition' = $DatumConfiguration }
+
+    #
+    # Determine the LCM Configuration Mode
+
+    # If the ConfigurationMode parameter is provided, use it. Otherwise, determine the mode from the Datum Configuration.
+    if (-not $ConfigurationMode) {
+        $ConfigurationMode = Get-LCMConfigurationMode -DatumConfigurationMode $DatumConfiguration.LCMConfigurationMode
+    }
+
+    #
     # Invoke the Resources
 
     # Create a hashtable to store the parameters
     $params = @{
-        Mode = $Mode
+        ConfigurationMode = $ConfigurationMode
         DSCCompositeResourcePath = Join-Path $DatumConfigurationPath 'CompositeResources'
     }
 
@@ -154,7 +174,12 @@ function Invoke-AzDoLCM {
         $params.ReportPath = $ReportPath
     }
 
-    Get-ChildItem -LiteralPath $exportConfigDir -File -Filter "*.yml" | ForEach-Object { 
+    # Pass ContinueOnError through to each LCM run
+    if ($ContinueOnError) {
+        $params.ContinueOnError = $true
+    }
+
+    Get-ChildItem -LiteralPath $exportConfigDir -File -Filter "*.yml" | ForEach-Object {
         Start-LCM -FilePath $_.Fullname @params
     }
 

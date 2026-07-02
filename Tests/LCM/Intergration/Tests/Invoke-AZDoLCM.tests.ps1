@@ -8,6 +8,8 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
         # Load the module into memory
         $modulePath = Get-ModulePath
 
+        # Load the Enums First
+        Get-ChildItem -LiteralPath $modulePath.EnumsDirectory -Recurse -File -Include *.ps1 | ForEach-Object { . $_.FullName }
         # Load the Classes First
         Get-ChildItem -LiteralPath $modulePath.ClassesDirectory -Recurse -File -Include *.ps1 | Where-Object { . $_.FullName }
         # Load the Public Functions
@@ -44,7 +46,7 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
         Mock -CommandName Invoke-DscResource -ParameterFilter {
             $Method -eq 'Test'
         } -MockWith { 
-            return @{
+            return @{ 
                 InDesiredState = $true
             }
         }
@@ -53,7 +55,7 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
             AzureDevopsOrganizationName = 'mock-org'
             exportConfigDir = Join-Path $TestDrive -ChildPath 'Output'
             JITToken = 'mock'
-            Mode = 'test'
+            ConfigurationMode = 'Audit'
             ConfigurationSourcePath = $null
         }
 
@@ -76,6 +78,21 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
             Mock -CommandName Write-Verbose
             Mock -CommandName Write-Warning
 
+        }
+
+        AfterEach {
+            $params.ConfigurationMode = 'Audit'
+        }
+
+        It "Should not throw any errors when using 'StandardResources' test case" {
+            $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\StandardResources'
+            { Invoke-AZDoLCM @params } | Should -Not -Throw
+        }
+
+        It "Should not throw any errors when using 'StandardResources' test case with no ConfigurationMode parameter specified" {
+            $params.Remove('ConfigurationMode')
+            $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\StandardResources'
+            { Invoke-AZDoLCM @params } | Should -Not -Throw
         }
 
         It "Should not throw any errors when using 'StandardResources' test case" {
@@ -155,4 +172,132 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
         }
 
     }
+
+    Context "When running Invoke-AZDoLCM with a custom execution method" {
+
+        BeforeAll {
+            Import-Module 'azdo-dsc-lcm'
+        }
+
+        BeforeEach {
+            # Reset the parameters
+            $references = @{}
+            $variables = @{}
+            $parameters = @{}
+
+            Mock -CommandName Write-Host
+            Mock -CommandName Write-Error
+            Mock -CommandName Write-Verbose
+            Mock -CommandName Write-Warning
+
+        }
+
+        It "Should use the custom execution method for Test" {
+
+            $params.ConfigurationMode = 'Audit'
+            $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
+            $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\CustomExecutionMethod'
+
+            #Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' } -MockWith { return @{} }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Test' } -MockWith { return @{ InDesiredState = $true } }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' }
+            Mock -CommandName Write-Verbose
+
+            Invoke-AZDoLCM @params
+
+            Assert-MockCalled -CommandName Write-Verbose -Times 1 -ParameterFilter { $Message -eq "Using custom execution method: Test" }
+            Assert-MockCalled -CommandName Invoke-DscResource -Times 2 -ParameterFilter { $Method -eq 'Test' }
+            Assert-MockCalled -CommandName Invoke-DscResource -Exactly 0 -ParameterFilter { $Method -eq 'Set' }
+
+        }
+
+        It "Should not use the custom execution method for None" {
+
+            $params.ConfigurationMode = 'Enforce'
+            $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
+            $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\CustomExecutionMethod#2'
+
+            #Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' } -MockWith { return @{} }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Test' } -MockWith { return @{ InDesiredState = $true } }
+            Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' }
+            Mock -CommandName Write-Verbose
+
+            Invoke-AZDoLCM @params
+
+            Assert-MockCalled -CommandName Write-Verbose -Exactly 0 -ParameterFilter { $Message -eq "Using custom execution method: Test" }
+
+        }
+
+    }
+
+    Context "When running Invoke-AZDoLCM with -ContinueOnError" {
+
+        BeforeAll {
+            Import-Module 'azdo-dsc-lcm'
+        }
+
+        BeforeEach {
+            $references = @{}
+            $variables  = @{}
+            $parameters = @{}
+
+            Mock -CommandName Write-Host
+            Mock -CommandName Write-Error
+            Mock -CommandName Write-Verbose
+            Mock -CommandName Write-Warning
+
+            # Make AzDoProject's Test report not-in-desired-state so Set is triggered
+            Mock -CommandName Invoke-DscResource -ParameterFilter {
+                $Method -eq 'Test' -and $Name -eq 'AzDoProject'
+            } -MockWith { return @{ InDesiredState = $false } }
+
+            # Make AzDoProject's Set fail
+            Mock -CommandName Invoke-DscResource -ParameterFilter {
+                $Method -eq 'Set' -and $Name -eq 'AzDoProject'
+            } -MockWith { throw "Mocked AzDoProject Set failure" }
+
+        }
+
+        AfterEach {
+            $params.ConfigurationMode = 'Audit'
+            $params.Remove('ContinueOnError')
+        }
+
+        It "Should stop all subsequent tasks when a Set fails and -ContinueOnError is NOT specified" {
+            $params.ConfigurationMode = 'Enforce'
+            $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
+            $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\ContinueOnError'
+
+            { Invoke-AZDoLCM @params } | Should -Not -Throw
+
+            $reports = Get-ChildItem -Path $params.ReportPath -Recurse -File
+            $report = Import-CSV -Path $reports[0].FullName
+
+            # IndependentResource=PASS, Project=FAIL(x2 rows), DependentOnIndependent=SKIPPED, DependentOnProject=SKIPPED
+            $report | Should -HaveCount 5
+            $report | Where-Object { $_.Result -eq 'SKIPPED' } | Should -HaveCount 2
+            $report | Where-Object { $_.Result -eq 'FAIL' }    | Should -HaveCount 2
+            $report | Where-Object { $_.Result -eq 'PASS' }    | Should -HaveCount 1
+        }
+
+        It "Should skip only dependent resources and continue with independent resources when -ContinueOnError is specified" {
+            $params.ConfigurationMode = 'Enforce'
+            $params.ContinueOnError   = $true
+            $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
+            $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\ContinueOnError'
+
+            { Invoke-AZDoLCM @params } | Should -Not -Throw
+
+            $reports = Get-ChildItem -Path $params.ReportPath -Recurse -File
+            $report = Import-CSV -Path $reports[0].FullName
+
+            # IndependentResource=PASS, Project=FAIL(x2), DependentOnIndependent=PASS, DependentOnProject=SKIPPED
+            $report | Should -HaveCount 5
+            $report | Where-Object { $_.Result -eq 'SKIPPED' } | Should -HaveCount 1
+            $report | Where-Object { $_.Result -eq 'FAIL' }    | Should -HaveCount 2
+            $report | Where-Object { $_.Result -eq 'PASS' }    | Should -HaveCount 2
+        }
+
+    }
+
 }

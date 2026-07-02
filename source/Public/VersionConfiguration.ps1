@@ -12,6 +12,9 @@ Data ModuleConfigurationData {
         # Define the minimum and maximum versions for the azdo-dsc-lcm Module.
         DSCResourceMinimumVersion = '1.0'
         DSCResourceMaximumVersion = '1.9'
+        # Define the minimum and maximum versions for the azdo-dsc-lcm module itself.
+        AZDOLCMMinimumVersion = '0.1'
+        AZDOLCMMaximumVersion = '1.9'
     }
 
 }

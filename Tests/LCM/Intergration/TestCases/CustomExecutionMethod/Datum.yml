@@ -9,14 +9,12 @@ DatumHandlersThrowOnError: true
 
 # Datum Handlers are used to process Datum values.
 default_lookup_options: MostSpecific
-# Define the LCM Configuration Mode for the Datum Configuration.
 
 LCMConfigurationMode:
   # The LCM Configuration Mode can be one of the following: ApplyOnly, Audit, Enforce, Scheduled
   ConfigurationMode: Audit
   # Define a Change Window Array that specifies when the configuration can be applied.
   ChangeWindows: []
-
 
 # Configuration and LCM Versioning Settings for the Configuration. This ensures that the right version of the LCM is used to apply the configuration.
 LCMConfigSettings:

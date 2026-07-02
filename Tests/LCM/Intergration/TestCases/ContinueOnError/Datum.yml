@@ -1,0 +1,31 @@
+ResolutionPrecedence:
+  - Projects\$($Node.ProjectPresence)\$($Node.Project)
+  - ProjectPolicies\Project
+
+DatumHandlersThrowOnError: true
+
+default_lookup_options: MostSpecific
+
+LCMConfigurationMode:
+  ConfigurationMode: Enforce
+  ChangeWindows: []
+
+LCMConfigSettings:
+  ConfigurationVersion: 0.1
+  AZDOLCMVersion: 0.2
+  DSCResourceVersion: 2.0
+
+DatumHandlers:
+  Datum.InvokeCommand::InvokeCommand:
+    SkipDuringLoad: true
+
+lookup_options:
+
+  variables:
+    merge_hash_array: deep
+
+  resources:
+    merge_hash_array: UniqueKeyValTuples
+    merge_options:
+      tuple_keys:
+        - name

@@ -1,10 +1,10 @@
 task Copy_ChangeLog {
 
-    $sourcePath = "$PSScriptRoot\..\..\CHANGELOG.md" 
-    $moduleDestinationPath = "$PSScriptRoot\..\..\Output\azdo-dsc-lcm\"
-    $outputDestinationPath = "$PSScriptRoot\..\..\Output\"
+    $sourcePath = Get-Item "$PSScriptRoot\..\..\CHANGELOG.md" 
+    $moduleDestinationPath = Get-Item "$PSScriptRoot\..\..\output\azdo-dsc-lcm\"
+    $outputDestinationPath = Get-Item "$PSScriptRoot\..\..\output\"
 
-    Copy-Item -Path $sourcePath -Destination $moduleDestinationPath -Force
-    Copy-Item -Path $sourcePath -Destination $outputDestinationPath -Force
+    Copy-Item -Path $sourcePath.FullName -Destination $moduleDestinationPath.FullName -Force
+    Copy-Item -Path $sourcePath.FullName -Destination $outputDestinationPath.FullName -Force
 
 }

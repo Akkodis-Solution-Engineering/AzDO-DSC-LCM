@@ -11,12 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `executionMethodOverride` property to DSC-Based Resources.
 - Added Datum.yaml LCMConfigurationMode property. Introduced CaC Change Windows.
 - Added `-ContinueOnError` switch to cascade resource failures to dependents while allowing independent resources to continue.
+- Added `Invoke-DscLCM` public function exposing the LCM's generic orchestration logic (Datum compilation, configuration-mode resolution, per-file LCM execution) without any Azure DevOps authentication dependency, enabling non-Azure-DevOps DSC resource modules to use the LCM.
 
 ### Changed
 
 - Replaced "Set" and "Test" modes with "ApplyOnly", "Audit", "Enforce" and "Scheduled"
 - Refactored DSC Resources to be classed-based.
 - LCM will perform an additional 'Test' after 'Set' to validate that setting has been applied correctly.
+- `AzureDevOpsDsc` and `AzureDevOpsDsc.Common` are no longer hard `RequiredModules` for the `azdo-dsc-lcm` module manifest; `Invoke-AZDoLCM` now checks for `AzureDevOpsDsc.Common` at call time instead, so `Import-Module azdo-dsc-lcm` no longer requires them to be installed.
 
 ### Fixed
 

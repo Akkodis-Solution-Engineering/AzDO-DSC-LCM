@@ -468,3 +468,28 @@ In the realm of configuration, there are specialized commands designed to modify
         - Monitor logs and outputs for any runtime errors or warnings that could indicate misconfigurations or issues needing resolution.
     - __Verify Expected Outcomes:__
         - Conduct thorough testing to confirm that the LCM behaves as expected, making adjustments as necessary to address any discrepancies or failures.
+
+## Using Invoke-DscLCM Directly (Non-Azure DevOps Consumers)
+
+The LCM's execution engine (Datum compilation, configuration validation, resource invocation) does not depend on Azure DevOps in any way — it invokes whatever DSC resource module the compiled configuration's `type:` fields reference. `Invoke-AZDoLCM` is a thin, Azure-DevOps-flavored wrapper around this engine: it authenticates to Azure DevOps and then delegates everything else to `Invoke-DscLCM`.
+
+If your configuration targets a different (or no) authenticated backend, call `Invoke-DscLCM` directly. It requires no `AzureDevOpsDsc` or `AzureDevOpsDsc.Common` install, and performs no authentication of its own — authenticate to whatever your configuration's resources require using that module's own mechanism before calling it.
+
+```powershell
+Import-Module azdo-dsc-lcm
+
+# Set the cache directory the LCM uses during a run.
+[System.Environment]::SetEnvironmentVariable("AZDODSC_CACHE_DIRECTORY", "C:\AzureDevOpsDSC\Cache")
+
+# Authenticate to whatever DSC resource module your configuration's `type:` fields reference,
+# using that module's own mechanism, before calling Invoke-DscLCM.
+
+$params = @{
+    exportConfigDir         = 'C:\AzureDevOpsDSC\Configuration Export\'
+    ConfigurationSourcePath = 'C:\MyConfigRepo'
+    ConfigurationMode       = 'Audit'
+}
+Invoke-DscLCM @params
+```
+
+`Invoke-AZDoLCM` remains the recommended entry point for Azure DevOps DSC configurations — it now checks for `AzureDevOpsDsc.Common` when called, rather than requiring it at `Import-Module` time, so `Import-Module azdo-dsc-lcm` no longer fails in environments that only need the generic engine.

@@ -61,14 +61,6 @@
             MaximumVersion = '1.0.0'
         }
         @{
-            ModuleName = 'AzureDevOpsDsc.Common'
-            MaximumVersion = '1.0.0'
-        }
-        @{
-            ModuleName = 'AzureDevOpsDsc'
-            MaximumVersion = '1.0.0'
-        }
-        @{
             ModuleName = 'datum'
             MaximumVersion = '1.0.0'
         }
@@ -100,6 +92,7 @@
     CmdletsToExport = @(
         'Build-DatumConfiguration'
         'Invoke-AZDoLCM'
+        'Invoke-DscLCM'
         'Resolve-AzDoDatumProject'
         'Stop-TaskProcessing'
         'Test-DatumConfiguration'

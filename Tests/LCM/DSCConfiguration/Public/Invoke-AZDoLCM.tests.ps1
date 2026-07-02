@@ -11,6 +11,7 @@ Describe "Invoke-AZDoLCM Function Tests" -Tag Unit {
             (Get-FunctionPath 'Build-DatumConfiguration.ps1')
             (Get-FunctionPath 'Clone-Repository.ps1')
             (Get-FunctionPath 'Get-LCMConfigurationMode.ps1')
+            (Get-FunctionPath 'Test-DatumConfiguration.ps1')
         ) | ForEach-Object {
             . $_.FullName
         }

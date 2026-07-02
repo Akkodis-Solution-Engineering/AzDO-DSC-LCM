@@ -607,7 +607,7 @@ Describe "Start-LCM Function Tests" -Tag Unit, MockedClass {
                 $Message -like "Skipping resource*dependency 'Resource1' failed*"
             } -Exactly 1
             Assert-MockCalled -CommandName Write-Host -ParameterFilter { $Message -eq "Tasks Skipped: 1" } -Exactly 1
-            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "*Continuing (ContinueOnError is set)*" } -AtLeast 1
+            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "*Continuing (ContinueOnError is set)*" } -Times 1
 
         }
 

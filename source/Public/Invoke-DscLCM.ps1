@@ -27,9 +27,6 @@ Invoke-DscLCM -exportConfigDir "C:\Configs" -ConfigurationSourcePath "https://re
 
 This example compiles and runs the configuration in 'Audit' mode.
 
-.NOTES
-Ensure that the environment variable AZDODSC_CACHE_DIRECTORY is set before running this function. The function will throw an error if this environment variable is not set.
-
 #>
 
 function Invoke-DscLCM {
@@ -57,13 +54,6 @@ function Invoke-DscLCM {
 
     # Set the Error Action Preference
     $ErrorActionPreference = "Stop"
-
-    #
-    # Test to make sure that the Enviroment Variable is Set
-
-    if (-not $ENV:AZDODSC_CACHE_DIRECTORY) {
-        throw "The Environment Variable AZDODSC_CACHE_DIRECTORY is not set. Please set the environment variable before running this script."
-    }
 
     #
     # Clone the Datum Configuration from the Configuration URL

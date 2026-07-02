@@ -106,6 +106,15 @@ function Invoke-AzDoLCM {
     $ErrorActionPreference = "Stop"
 
     #
+    # Test to make sure that the Enviroment Variable is Set.
+    # The AzureDevOpsDsc resources read this at execution time; the generic Invoke-DscLCM
+    # engine has no use for it, so this check lives here rather than in Invoke-DscLCM.
+
+    if (-not $ENV:AZDODSC_CACHE_DIRECTORY) {
+        throw "The Environment Variable AZDODSC_CACHE_DIRECTORY is not set. Please set the environment variable before running this script."
+    }
+
+    #
     # Ensure the Azure DevOps-specific auth dependency is available before doing anything else.
 
     try {

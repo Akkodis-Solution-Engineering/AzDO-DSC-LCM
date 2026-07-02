@@ -478,19 +478,16 @@ In the realm of configuration, there are specialized commands designed to modify
 
 The LCM's execution engine (Datum compilation, configuration validation, resource invocation) does not depend on Azure DevOps in any way — it invokes whatever DSC resource module the compiled configuration's `type:` fields reference. `Invoke-AZDoLCM` is a thin, Azure-DevOps-flavored wrapper around this engine: it authenticates to Azure DevOps and then delegates everything else to `Invoke-DscLCM`.
 
-If your configuration targets a different (or no) authenticated backend, call `Invoke-DscLCM` directly. It requires no `AzureDevOpsDsc` or `AzureDevOpsDsc.Common` install, and performs no authentication of its own — authenticate to whatever your configuration's resources require using that module's own mechanism before calling it.
+If your configuration targets a different (or no) authenticated backend, call `Invoke-DscLCM` directly. It requires no `AzureDevOpsDsc` or `AzureDevOpsDsc.Common` install, needs no `AZDODSC_CACHE_DIRECTORY` environment variable (that's only read by the `AzureDevOpsDsc` resources themselves), and performs no authentication of its own — authenticate to whatever your configuration's resources require using that module's own mechanism before calling it.
 
 ```powershell
 Import-Module azdo-dsc-lcm
-
-# Set the cache directory the LCM uses during a run.
-[System.Environment]::SetEnvironmentVariable("AZDODSC_CACHE_DIRECTORY", "C:\AzureDevOpsDSC\Cache")
 
 # Authenticate to whatever DSC resource module your configuration's `type:` fields reference,
 # using that module's own mechanism, before calling Invoke-DscLCM.
 
 $params = @{
-    exportConfigDir         = 'C:\AzureDevOpsDSC\Configuration Export\'
+    exportConfigDir         = 'C:\MyConfig\Export\'
     ConfigurationSourcePath = 'C:\MyConfigRepo'
     ConfigurationMode       = 'Audit'
 }

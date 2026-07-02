@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactored DSC Resources to be classed-based.
 - LCM will perform an additional 'Test' after 'Set' to validate that setting has been applied correctly.
 - `AzureDevOpsDsc` and `AzureDevOpsDsc.Common` are no longer hard `RequiredModules` for the `azdo-dsc-lcm` module manifest; `Invoke-AZDoLCM` now checks for `AzureDevOpsDsc.Common` at call time instead, so `Import-Module azdo-dsc-lcm` no longer requires them to be installed.
+- The `AZDODSC_CACHE_DIRECTORY` environment variable check moved from the generic `Invoke-DscLCM` to `Invoke-AZDoLCM`, since it's only read by the `AzureDevOpsDsc` resources themselves, not by the LCM engine.
 
 ### Fixed
 

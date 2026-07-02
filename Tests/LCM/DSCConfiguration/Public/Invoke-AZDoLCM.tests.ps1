@@ -22,6 +22,31 @@ Describe "Invoke-AZDoLCM Function Tests" -Tag Unit {
         $exportConfigDir = New-MockDirectoryPath
         $ConfigurationSourcePath = New-MockDirectoryPath
 
+        # Most contexts assume this is set; "Environment Variable Check" below covers the unset case.
+        $Env:AZDODSC_CACHE_DIRECTORY = "mocked"
+
+    }
+
+    AfterAll {
+        $Env:AZDODSC_CACHE_DIRECTORY = $null
+    }
+
+    Context "Environment Variable Check" {
+
+        AfterEach {
+            $Env:AZDODSC_CACHE_DIRECTORY = "mocked"
+        }
+
+        It "Should throw an error if AZDODSC_CACHE_DIRECTORY environment variable is not set" {
+            Remove-Item Env:AZDODSC_CACHE_DIRECTORY -ErrorAction SilentlyContinue
+            { Invoke-AZDoLCM -AzureDevopsOrganizationName "MyOrg" -exportConfigDir $exportConfigDir -JITToken "abc123" -ConfigurationMode "Audit" -ConfigurationSourcePath $ConfigurationSourcePath } | Should -Throw "*The Environment Variable AZDODSC_CACHE_DIRECTORY is not set. Please set the environment variable before running this script*"
+            Should -Invoke -CommandName Invoke-DscLCM -Exactly 0
+        }
+
+        It "Should not throw an error if AZDODSC_CACHE_DIRECTORY environment variable is set" {
+            $env:AZDODSC_CACHE_DIRECTORY = "SomePath"
+            { Invoke-AZDoLCM -AzureDevopsOrganizationName "MyOrg" -exportConfigDir $exportConfigDir -JITToken "abc123" -ConfigurationMode "Audit" -ConfigurationSourcePath $ConfigurationSourcePath } | Should -Not -Throw
+        }
     }
 
     Context "AzureDevOpsDsc.Common Dependency Check" {

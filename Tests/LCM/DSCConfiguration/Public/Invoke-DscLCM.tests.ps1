@@ -40,33 +40,10 @@ Describe "Invoke-DscLCM Function Tests" -Tag Unit {
 
     }
 
-    Context "Environment Variable Check" {
-
-            BeforeAll {
-                Mock -CommandName Test-Path -MockWith { return $true }
-                $Env:AZDODSC_CACHE_DIRECTORY = $null
-            }
-
-            AfterAll {
-                $Env:AZDODSC_CACHE_DIRECTORY = $null
-            }
-
-        It "Should throw an error if AZDODSC_CACHE_DIRECTORY environment variable is not set" {
-            Remove-Item Env:AZDODSC_CACHE_DIRECTORY -ErrorAction SilentlyContinue
-            { Invoke-DscLCM -exportConfigDir $exportConfigDir -ConfigurationMode "Audit" -ConfigurationSourcePath $ConfigurationSourcePath } | Should -Throw "*The Environment Variable AZDODSC_CACHE_DIRECTORY is not set. Please set the environment variable before running this script*"
-        }
-
-        It "Should not throw an error if AZDODSC_CACHE_DIRECTORY environment variable is set" {
-            $env:AZDODSC_CACHE_DIRECTORY = "SomePath"
-            { Invoke-DscLCM -exportConfigDir $exportConfigDir -ConfigurationMode "Audit" -ConfigurationSourcePath $ConfigurationSourcePath } | Should -Not -Throw
-        }
-    }
-
     Context "Execution Logic" {
 
         BeforeAll {
             Mock -CommandName Test-Path -MockWith { return $true }
-            $Env:AZDODSC_CACHE_DIRECTORY = "mocked"
         }
 
        It "Should build datum configuration" {
@@ -76,14 +53,6 @@ Describe "Invoke-DscLCM Function Tests" -Tag Unit {
     }
 
     Context "When testing -ConfigurationSourcePath" {
-
-        BeforeAll {
-            $Env:AZDODSC_CACHE_DIRECTORY = "mocked"
-        }
-
-        AfterAll {
-            $Env:AZDODSC_CACHE_DIRECTORY = $null
-        }
 
         it "should call Clone-Repository with a valid URL" {
             Mock -CommandName 'Clone-Repository' -Verifiable -MockWith {
@@ -127,14 +96,9 @@ Describe "Invoke-DscLCM Function Tests" -Tag Unit {
     Context "When testing -ConfigurationMode" {
 
         BeforeAll {
-            $Env:AZDODSC_CACHE_DIRECTORY = "mocked"
             mock -CommandName 'Get-ChildItem' -MockWith { @(
                 [PSCustomObject]@{ Fullname = "$TestDrive\mockConfig.yml" }
             ) }
-        }
-
-        AfterAll {
-            $Env:AZDODSC_CACHE_DIRECTORY = $null
         }
 
         it "should call Start-LCM with the specified ConfigurationMode" {

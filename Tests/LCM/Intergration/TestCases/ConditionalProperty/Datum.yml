@@ -17,6 +17,7 @@ LCMConfigurationMode:
   # Define a Change Window Array that specifies when the configuration can be applied.
   ChangeWindows: []
 
+
 # Configuration and LCM Versioning Settings for the Configuration. This ensures that the right version of the LCM is used to apply the configuration.
 LCMConfigSettings:
   ConfigurationVersion: 0.1

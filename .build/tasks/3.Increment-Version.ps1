@@ -4,7 +4,6 @@ task Increment_Version {
     $scriptRoot = "$PSScriptRoot\"
     $outputDirectory = Get-Item "$scriptRoot\..\..\output"
 
-
     $latestVersion = & git tag | Where-Object { $_ -match "\d+\.\d+\.\d+" } | Sort-Object -Descending | Select-Object -First 1
     if ([String]::IsNullOrEmpty($latestVersion)) {
         $latestVersion = "0.0.1"

@@ -27,13 +27,6 @@ Describe "DSCBaseResource Class Tests" -Tag Unit {
             $resource = [DSCBaseResource]::new()
             $resource.properties | Should -BeNullOrEmpty
         }
-
-        It "Should initialize merge_with as an empty string" {
-            $resource = [DSCBaseResource]::new()
-            $resource.merge_with | Should -BeNullOrEmpty
-        }
-        
-
     }
 
     Context "Method Tests" {

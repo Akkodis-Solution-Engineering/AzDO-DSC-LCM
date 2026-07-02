@@ -78,7 +78,7 @@ Function Get-ModulePath {
     }
 
     $SourcesDirectory   = Join-Path $Global:RepositoryRoot 'source'
-    $EnumsDirectory     = Join-Path $SourcesDirectory 'Enum'    
+    $EnumsDirectory     = Join-Path $SourcesDirectory 'Enum'
     $ClassesDirectory   = Join-Path $SourcesDirectory 'Classes'
     $PublicFunctionsDirectory   = Join-Path $SourcesDirectory 'Public'
     $PrivateFunctionsDirectory  = Join-Path $SourcesDirectory 'Private'

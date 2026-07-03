@@ -10,7 +10,12 @@
 
 ## Overview
 
-`AzDO-DSC-LCM` is the Local Configuration Manager (LCM) component for the `AzureDevOpsDsc` DSC Module. This module helps manage Azure DevOps resources through Desired State Configuration (DSC). Utilizes Datum to merge configuration stubs into larger pieces of configuration which is parsed into the LCM.
+`AzDO-DSC-LCM` is a Local Configuration Manager (LCM) for Desired State Configuration (DSC). Its execution engine is resource-agnostic — it invokes whatever DSC resource module a compiled configuration's `type:` fields reference, so it isn't limited to the `AzureDevOpsDsc` DSC Module. It utilizes Datum to merge configuration stubs into larger pieces of configuration which is parsed into the LCM.
+
+Two public entry points build on this same engine:
+
+- `Invoke-AZDoLCM`: the Azure DevOps-flavored entry point. Authenticates to Azure DevOps (Managed Identity or PAT) and is the recommended choice for configurations that manage `AzureDevOpsDsc` resources.
+- `Invoke-DscLCM`: a generic entry point with no Azure DevOps dependency at all — no `AzureDevOpsDsc`/`AzureDevOpsDsc.Common` install required. Use this if your configuration targets other DSC resource modules; authenticate to whatever those resources require using their own mechanism before calling it. See [Using Invoke-DscLCM Directly (Non-Azure DevOps Consumers)](#using-invoke-dsclcm-directly-non-azure-devops-consumers) for details.
 
 ## Datum
 
@@ -468,3 +473,25 @@ In the realm of configuration, there are specialized commands designed to modify
         - Monitor logs and outputs for any runtime errors or warnings that could indicate misconfigurations or issues needing resolution.
     - __Verify Expected Outcomes:__
         - Conduct thorough testing to confirm that the LCM behaves as expected, making adjustments as necessary to address any discrepancies or failures.
+
+## Using Invoke-DscLCM Directly (Non-Azure DevOps Consumers)
+
+The LCM's execution engine (Datum compilation, configuration validation, resource invocation) does not depend on Azure DevOps in any way — it invokes whatever DSC resource module the compiled configuration's `type:` fields reference. `Invoke-AZDoLCM` is a thin, Azure-DevOps-flavored wrapper around this engine: it authenticates to Azure DevOps and then delegates everything else to `Invoke-DscLCM`.
+
+If your configuration targets a different (or no) authenticated backend, call `Invoke-DscLCM` directly. It requires no `AzureDevOpsDsc` or `AzureDevOpsDsc.Common` install, needs no `AZDODSC_CACHE_DIRECTORY` environment variable (that's only read by the `AzureDevOpsDsc` resources themselves), and performs no authentication of its own — authenticate to whatever your configuration's resources require using that module's own mechanism before calling it.
+
+```powershell
+Import-Module azdo-dsc-lcm
+
+# Authenticate to whatever DSC resource module your configuration's `type:` fields reference,
+# using that module's own mechanism, before calling Invoke-DscLCM.
+
+$params = @{
+    exportConfigDir         = 'C:\MyConfig\Export\'
+    ConfigurationSourcePath = 'C:\MyConfigRepo'
+    ConfigurationMode       = 'Audit'
+}
+Invoke-DscLCM @params
+```
+
+`Invoke-AZDoLCM` remains the recommended entry point for Azure DevOps DSC configurations — it now checks for `AzureDevOpsDsc.Common` when called, rather than requiring it at `Import-Module` time, so `Import-Module azdo-dsc-lcm` no longer fails in environments that only need the generic engine.

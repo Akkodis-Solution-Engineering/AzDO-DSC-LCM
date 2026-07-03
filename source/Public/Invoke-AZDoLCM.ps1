@@ -3,7 +3,9 @@
 Invokes the Azure DevOps Lifecycle Management (LCM) process using specified configurations and authentication methods.
 
 .DESCRIPTION
-The Invoke-AZDoLCM function is designed to manage the lifecycle of Azure DevOps configurations. It supports advanced function features similar to cmdlets and allows for different authentication methods, including Managed Identity and Personal Access Token (PAT). The function handles the cloning of configuration repositories, compilation of configurations, and invocation of resources based on the provided parameters.
+The Invoke-AZDoLCM function is designed to manage the lifecycle of Azure DevOps configurations. It supports advanced function features similar to cmdlets and allows for different authentication methods, including Managed Identity and Personal Access Token (PAT). It authenticates to Azure DevOps and then delegates configuration compilation and resource invocation to Invoke-DscLCM.
+
+This function requires the AzureDevOpsDsc.Common module to be installed. If your configuration does not need Azure DevOps authentication, call Invoke-DscLCM directly instead.
 
 .PARAMETER AzureDevopsOrganizationName
 Specifies the name of the Azure DevOps organization. This parameter is mandatory.
@@ -104,36 +106,22 @@ function Invoke-AzDoLCM {
     $ErrorActionPreference = "Stop"
 
     #
-    # Get the Execution Path
-    #$ExecutionPath = Split-Path -Path $MyInvocation.MyCommand.Definition -Parent
-
-    #
-    # Test to make sure that the Enviroment Variable is Set
+    # Test to make sure that the Enviroment Variable is Set.
+    # The AzureDevOpsDsc resources read this at execution time; the generic Invoke-DscLCM
+    # engine has no use for it, so this check lives here rather than in Invoke-DscLCM.
 
     if (-not $ENV:AZDODSC_CACHE_DIRECTORY) {
         throw "The Environment Variable AZDODSC_CACHE_DIRECTORY is not set. Please set the environment variable before running this script."
     }
 
     #
-    # Clone the Datum Configuration from the Configuration URL
+    # Ensure the Azure DevOps-specific auth dependency is available before doing anything else.
 
-    # Test ConfigurationSourcePath if it is a URL. If URL attempt to clone.
-    if ($ConfigurationSourcePath -match '^(http|https):\/\/') {
-        # Cone from URL
-        $DatumConfigurationPath = Clone-Repository -DatumURLConfig $ConfigurationSourcePath
+    try {
+        Import-Module -Name 'AzureDevOpsDsc.Common' -ErrorAction Stop
+    } catch {
+        throw "[Invoke-AZDoLCM] Required module 'AzureDevOpsDsc.Common' is not available. Install it via 'Install-Module AzureDevOpsDsc.Common' before calling Invoke-AZDoLCM, or call Invoke-DscLCM directly if Azure DevOps authentication is not required. Underlying error: $($_.Exception.Message)"
     }
-    # Test if ConfigurationSourcePath is a directory path that exists.
-    elseif (Test-Path -Path $ConfigurationSourcePath -PathType Container) {
-        $DatumConfigurationPath = $ConfigurationSourcePath
-    } 
-    # Else. Throw an error for bad data.
-    else {
-        throw "[Invoke-LCM] Invalid ConfigurationSourcePath: $ConfigurationSourcePath"
-    }
-
-    #
-    # Compile the Datum Configuration
-    Build-DatumConfiguration -OutputPath $exportConfigDir -ConfigurationPath $DatumConfigurationPath
 
     #
     # Determine the Authentication Type and create the Authentication Provider
@@ -142,132 +130,28 @@ function Invoke-AzDoLCM {
         New-AzDoAuthenticationProvider -OrganizationName $AzureDevopsOrganizationName -PersonalAccessToken $PATToken
     } elseif ($AuthenticationType -eq 'ManagedIdentity') {
         New-AzDoAuthenticationProvider -OrganizationName $AzureDevopsOrganizationName -useManagedIdentity
-    } #else {
-    #    throw "The Authentication Type $AuthenticationType is not supported. Please use either 'PAT' or 'ManagedIdentity'."
-    #}
-
-    #
-    # Read and validate the Datum Configuration
-
-    $DatumConfiguration = Get-Content -Path (Join-Path $DatumConfigurationPath 'datum.yml') | ConvertFrom-Yaml
-    Test-DatumConfiguration -Datum @{ '__Definition' = $DatumConfiguration }
-
-    #
-    # Determine the LCM Configuration Mode
-
-    # If the ConfigurationMode parameter is provided, use it. Otherwise, determine the mode from the Datum Configuration.
-    if (-not $ConfigurationMode) {
-        $ConfigurationMode = Get-LCMConfigurationMode -DatumConfigurationMode $DatumConfiguration.LCMConfigurationMode
     }
 
     #
-    # Invoke the Resources
+    # Delegate configuration compilation and resource invocation to the generic entry point.
 
-    # Create a hashtable to store the parameters
     $params = @{
-        ConfigurationMode = $ConfigurationMode
-        DSCCompositeResourcePath = Join-Path $DatumConfigurationPath 'CompositeResources'
+        exportConfigDir         = $exportConfigDir
+        ConfigurationSourcePath = $ConfigurationSourcePath
     }
 
-    # If the ReportPath is provided, add it to the parameters
+    if ($ConfigurationMode) {
+        $params.ConfigurationMode = $ConfigurationMode
+    }
+
     if ($ReportPath) {
         $params.ReportPath = $ReportPath
     }
 
-    # Pass ContinueOnError through to each LCM run
     if ($ContinueOnError) {
         $params.ContinueOnError = $true
     }
 
-    Get-ChildItem -LiteralPath $exportConfigDir -File -Filter "*.yml" | ForEach-Object {
-        Start-LCM -FilePath $_.Fullname @params
-    }
-
-    <#
-    return
-
-    $postExecutionConfiguration = [System.Collections.Generic.List[HashTable]]::new()
-    # Once Completed, Iterate through the Output Directory and run the post execution tasks.
-    Get-ChildItem -LiteralPath $DatumConfigurationPath -File -Filter "*.yml" | ForEach-Object {
-
-        # Load the Configuration Files
-        $configuration = Get-Content $_.FullName | ConvertFrom-Yaml
-        
-        # Create a Hash Table to store the Post Execution Tasks.
-        # Include the Post Execution Tasks and Variables.
-        # The Variables are used to pass the variables to the Post Execution Tasks.
-
-        $hashTable = @{
-            postExecution = $configuration.resources
-            variables = $configuration.variables
-        }
-
-        # Add the Post Execution Tasks to the Configuration Files
-        if ($configuration.resources) {
-            $postExecutionConfiguration.Add($hashTable)
-        }
-
-        # ^\{(.+)\}$
-
-    }
-
-    <#
-    postExecutionTask:
-
-    - name: Org Group Members
-        type: AzureDevOpsDsc/AzDoProject
-        properties:
-        projectName: CON_$ProjectName
-        projectDescription: $ProjectDescription
-        visibility: private
-        SourceControlType: Git
-        ProcessTemplate: { scriptblock }     
-
-
-    #
-
-    #
-    # Flatten the Post Execution Tasks By Caculated Property
-    # Group the Post Execution Tasks by the Name and Type
-
-    $Configuration = $postExecutionConfiguration | ForEach-Object {
-        $_.postExecution | ForEach-Object {
-            $_
-        }
-    } | Group-Object -Property {
-        ("{0}/{1}" -f $_.type, $_.Name)
-    }
-
-    # Once the Post Execution Tasks are collected, iterate through the Post Execution Tasks and group them according to the Task Type.
-    # Iterate thorugh the Grouped Tasks and add the associated variables to the Post Execution Task.
-
-    $groupedPostExecutionTasks = [System.Collections.Generic.List[HashTable]]::new()
-
-    $Configuration | ForEach-Object {
-
-        $currentObject = $_.Group[0]
-        $name = $_.Name
-        $obj = @{
-            name = $name
-            postExecution = $currentObject
-            variables = [System.Collections.Generic.List[hashtable]]::new()
-        }
-
-        # Test if name exists within the postExecutionConfiguration
-        $postExecutionConfiguration | ForEach-Object {
-            $currentObj = $_
-            $matched = $currentObj.postExecution | Where-Object { "$($_.type)/$($_.name)" -eq $name } 
-
-            if ($matched) {
-                $obj.variables.Add($currentObj.variables)
-            }
-
-        }
-
-        $groupedPostExecutionTasks.Add($obj)
-
-    }
-
-    #>
+    Invoke-DscLCM @params
 
 }

@@ -1,16 +1,16 @@
-# AzDO-DSC-LCM
+# DSC.PipelineRunner.Akkodis
 
-[![Development Branch Code Coverage Status](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/Development.CodeCoverage.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/Development.CodeCoverage.yml)
-[![Development Intergration Test Status](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/Development.IntergrationTests.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/Development.IntergrationTests.yml)
-[![Main Branch Code Coverage Status](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/Main.CodeCoverage.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/Main.CodeCoverage.yml)
-[![Main Intergration Test Status](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/Main.IntergrationTests.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/Main.IntergrationTests.yml)
-[![Nightly Dev Build](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/nightly-dev-build.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/nightly-dev-build.yml)
-[![CodeQL Advanced](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/codeql.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/codeql.yml)
-[![Current Code Coverage Status](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/CodeCoverage.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/actions/workflows/CodeCoverage.yml)
+[![Development Branch Code Coverage Status](https://github.com/Akkodis-Solution-Engineering/DSC.PipelineRunner.Akkodis/actions/workflows/Development.CodeCoverage.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/DSC.PipelineRunner.Akkodis/actions/workflows/Development.CodeCoverage.yml)
+[![Development Intergration Test Status](https://github.com/Akkodis-Solution-Engineering/DSC.PipelineRunner.Akkodis/actions/workflows/Development.IntergrationTests.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/DSC.PipelineRunner.Akkodis/actions/workflows/Development.IntergrationTests.yml)
+[![Main Branch Code Coverage Status](https://github.com/Akkodis-Solution-Engineering/DSC.PipelineRunner.Akkodis/actions/workflows/Main.CodeCoverage.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/DSC.PipelineRunner.Akkodis/actions/workflows/Main.CodeCoverage.yml)
+[![Main Intergration Test Status](https://github.com/Akkodis-Solution-Engineering/DSC.PipelineRunner.Akkodis/actions/workflows/Main.IntergrationTests.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/DSC.PipelineRunner.Akkodis/actions/workflows/Main.IntergrationTests.yml)
+[![Nightly Dev Build](https://github.com/Akkodis-Solution-Engineering/DSC.PipelineRunner.Akkodis/actions/workflows/nightly-dev-build.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/DSC.PipelineRunner.Akkodis/actions/workflows/nightly-dev-build.yml)
+[![CodeQL Advanced](https://github.com/Akkodis-Solution-Engineering/DSC.PipelineRunner.Akkodis/actions/workflows/codeql.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/DSC.PipelineRunner.Akkodis/actions/workflows/codeql.yml)
+[![Current Code Coverage Status](https://github.com/Akkodis-Solution-Engineering/DSC.PipelineRunner.Akkodis/actions/workflows/CodeCoverage.yml/badge.svg)](https://github.com/Akkodis-Solution-Engineering/DSC.PipelineRunner.Akkodis/actions/workflows/CodeCoverage.yml)
 
 ## Overview
 
-`AzDO-DSC-LCM` is a Local Configuration Manager (LCM) for Desired State Configuration (DSC). Its execution engine is resource-agnostic — it invokes whatever DSC resource module a compiled configuration's `type:` fields reference, so it isn't limited to the `AzureDevOpsDsc` DSC Module. It utilizes Datum to merge configuration stubs into larger pieces of configuration which is parsed into the LCM.
+`DSC.PipelineRunner.Akkodis` is a Local Configuration Manager (LCM) for Desired State Configuration (DSC). Its execution engine is resource-agnostic — it invokes whatever DSC resource module a compiled configuration's `type:` fields reference, so it isn't limited to the `AzureDevOpsDsc` DSC Module. It utilizes Datum to merge configuration stubs into larger pieces of configuration which is parsed into the LCM.
 
 Two public entry points build on this same engine:
 
@@ -59,7 +59,7 @@ This LCM utilizes Datum from Gael Colas to streamline configuration. For more in
     __Datum.yml__
 
     ```yaml
-    LCMConfigSettings:
+    PipelineRunnerSettings:
       ConfigurationVersion: 1.0
       PipelineRunnerVersion: 1.0
       DSCResourceVersion: 1.0
@@ -213,7 +213,7 @@ In the realm of configuration, there are specialized commands designed to modify
 
 ## Getting Started
 
-1. Clone the repository: `git clone 'https://github.com/ZanattaMichael/AzDO-DSC-LCM' C:\Your-Path`
+1. Clone the repository: `git clone 'https://github.com/ZanattaMichael/DSC.PipelineRunner.Akkodis' C:\Your-Path`
 1. Using the `Example Configuration` Directory, create a custom datum directory structure following these guidelines:
    1. __Lower-Level Rules__ should be implemented first, such as organizational policies.
    1. __Intermediate-Level Rules__ apply to groups of projects. For example:
@@ -405,7 +405,7 @@ In the realm of configuration, there are specialized commands designed to modify
       steps:
 
         - pwsh: |
-            Import-Module AzDO-DSC-LCM, AzureDevOpsDsc;
+            Import-Module DSC.PipelineRunner.Akkodis, AzureDevOpsDsc;
             Write-Host "Source: $(build.sourcesDirectory)"
             Write-Host "Method: $(LCM_Method)"
 
@@ -448,7 +448,7 @@ In the realm of configuration, there are specialized commands designed to modify
       steps:
 
         - pwsh: |
-            Import-Module AzDO-DSC-LCM, AzureDevOpsDsc;
+            Import-Module DSC.PipelineRunner.Akkodis, AzureDevOpsDsc;
             Write-Host "Source: $(build.sourcesDirectory)"
             Write-Host "Method: $(LCM_Method)"
 

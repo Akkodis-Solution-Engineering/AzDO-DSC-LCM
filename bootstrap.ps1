@@ -1,6 +1,6 @@
 # The following script bootstraps the environment by installing necessary modules.
 
-# Install all the Dependencies needed for the AzDO-DSC-LCM module.
+# Install all the Dependencies needed for the DSC.PipelineRunner.Akkodis module.
 # Check PowerShell Version
 if ($PSVersionTable.PSVersion.Major -lt 7) {
     # Must be running on Windows if PowerShell version is less than 7

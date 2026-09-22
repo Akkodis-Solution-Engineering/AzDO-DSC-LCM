@@ -1,7 +1,7 @@
 task Copy_ChangeLog {
 
     $sourcePath = Get-Item "$PSScriptRoot\..\..\CHANGELOG.md" 
-    $moduleDestinationPath = Get-Item "$PSScriptRoot\..\..\output\azdo-dsc-lcm\"
+    $moduleDestinationPath = Get-Item "$PSScriptRoot\..\..\output\DSC.PipelineRunner.Akkodis\"
     $outputDestinationPath = Get-Item "$PSScriptRoot\..\..\output\"
 
     Copy-Item -Path $sourcePath.FullName -Destination $moduleDestinationPath.FullName -Force

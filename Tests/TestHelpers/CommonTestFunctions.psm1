@@ -98,7 +98,7 @@ Function Copy-TestCasesToTempDrive {
     Write-Host "[Copy-TestCasesToTempDrive] Copying Test Cases to Temp Drive"
 
     $param = @{
-        Path = Join-Path $Global:RepositoryRoot '\Tests\LCM\Intergration\TestCases'
+        Path = Join-Path $Global:RepositoryRoot '\Tests\PipelineRunner\Intergration\TestCases'
         Destination = $TestDrive
         Recurse = $true
         Force = $true
@@ -126,9 +126,9 @@ Function Install-Dependencies {
     }
 
     # Resolve the path to the module directory
-    $MockDSCResourceModulePath = Join-Path $Global:RepositoryRoot '\Tests\LCM\Intergration\Resources\Modules\AzureDevOpsDsc'
-    $MockDSCSupportingResourceModulePath = Join-Path $Global:RepositoryRoot '\Tests\LCM\Intergration\Resources\Modules\AzureDevOpsDsc.Common'
-    $LCMModulePath = Join-Path $Global:RepositoryRoot '\output\azdo-dsc-lcm'
+    $MockDSCResourceModulePath = Join-Path $Global:RepositoryRoot '\Tests\PipelineRunner\Intergration\Resources\Modules\AzureDevOpsDsc'
+    $MockDSCSupportingResourceModulePath = Join-Path $Global:RepositoryRoot '\Tests\PipelineRunner\Intergration\Resources\Modules\AzureDevOpsDsc.Common'
+    $PipelineRunnerModulePath = Join-Path $Global:RepositoryRoot '\output\DSC.PipelineRunner.Akkodis'
 
     # Find the user's module directory
     $ModuleDirectory = $env:PSModulePath.Split(';') | Where-Object { $_ -like "*$ENV:Username*" -and $_ -like "*documents*" }
@@ -138,12 +138,12 @@ Function Install-Dependencies {
 
     # Delete the module from the user's module directory
     Remove-Item -Path (Join-Path $ModuleDirectory -ChildPath 'AzureDevOpsDsc') -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path (Join-Path $ModuleDirectory -ChildPath 'azdo-dsc-lcm') -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path (Join-Path $ModuleDirectory -ChildPath 'DSC.PipelineRunner.Akkodis') -Recurse -Force -ErrorAction SilentlyContinue
 
     # Copy the module into the user's module directory
     Copy-Item -Path $MockDSCResourceModulePath -Destination $ModuleDirectory -Force -Recurse
     Copy-Item -Path $MockDSCSupportingResourceModulePath -Destination $ModuleDirectory -Force -Recurse
-    Copy-Item -Path $LCMModulePath -Destination $ModuleDirectory -Force -Recurse
+    Copy-Item -Path $PipelineRunnerModulePath -Destination $ModuleDirectory -Force -Recurse
 
     # Import the MockDSCModule
     Import-Module AzureDevOpsDsc -Version 0.0.1 -ErrorAction Stop

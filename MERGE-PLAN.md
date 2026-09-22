@@ -2,7 +2,7 @@
 
 **Status:** Draft for review
 **Source repos compared:**
-- This repo (`AzDO-DSC-LCM`, module `azdo-dsc-lcm`) — commit `7fb9259` on `main`
+- This repo (`AzDO-DSC-LCM`, module `DSC.PipelineRunner.Akkodis`) — commit `7fb9259` on `main`
 - [`ZanattaMichael/Dsc.PipelineRunner`](https://github.com/ZanattaMichael/Dsc.PipelineRunner) (module `Dsc.PipelineRunner`) — `main` @ clone time
 
 ## 1. Why this merge
@@ -20,16 +20,16 @@ the time and nobody ported them across:
 | Class-based resource model (`DSCConfigurationFile`, `DSCBaseResource`, `DSC_Resource`, `DSCStub`, `DSCCompositeResource`) | ✅ | ❌ (only `DscMethodResult`) |
 | Stub / partial-resource merging (`merge_with`, `Merge-StubResources`) | ✅ | ❌ (no `Merge-StubResources` anywhere) |
 | Composite resources (`type: composite/...`, linked `.yml`) | ✅ | ❌ (no composite handling at all) |
-| Time-based / scheduled enforcement (`ConfigurationMode: Scheduled`, `ChangeWindows`, `Get-LCMConfigurationMode`) | ✅ | ❌ (only `Mode: Test`/`Set`, no `ApplyOnly`/`Audit`/`Enforce`/`Scheduled`) |
+| Time-based / scheduled enforcement (`ConfigurationMode: Scheduled`, `ChangeWindows`, `Get-PipelineRunnerConfigurationMode`) | ✅ | ❌ (only `Mode: Test`/`Set`, no `ApplyOnly`/`Audit`/`Enforce`/`Scheduled`) |
 
-Everything else in `Dsc.PipelineRunner` is a genuine upgrade over this repo's `Start-LCM` /
+Everything else in `Dsc.PipelineRunner` is a genuine upgrade over this repo's `Start-DscRunner` /
 `Invoke-AZDoLCM` engine (see §3). The goal of this plan is to land on **this repo's feature set,
 built on `Dsc.PipelineRunner`'s engine**, not to pick one repo over the other.
 
 ## 2. What we keep from this repo (non-negotiable per user instruction)
 
 1. **Class-based logic** — `source/Classes/000-004*.ps1`, `source/Enum/000.ExecutionMethod.ps1`.
-2. **Time-based LCM enforcement** — `Get-LCMConfigurationMode.ps1`, `Get-HoursDifference.ps1`, the
+2. **Time-based LCM enforcement** — `Get-PipelineRunnerConfigurationMode.ps1`, `Get-HoursDifference.ps1`, the
    `ConfigurationMode: Scheduled` / `ChangeWindows` / `DaysOfWeek` Datum schema, and the
    `ApplyOnly` / `Audit` / `Enforce` vocabulary.
 3. **Stub resources** — `DSCStub`, `merge_with`, `Merge-StubResources.ps1`, `mergable` flag on
@@ -107,7 +107,7 @@ Grouped by theme, each with the source file(s):
 
 ## 4. The core architectural tension — and how to resolve it
 
-This repo's `Start-LCM` loop walks an array of **typed class instances** (`DSC_Resource` /
+This repo's `Start-DscRunner` loop walks an array of **typed class instances** (`DSC_Resource` /
 `DSCStub` / `DSCCompositeResource`, produced by `[DSCConfigurationFile]::New()` →
 `ConvertTo-Resource`). `Dsc.PipelineRunner`'s `Start-DscRunner` loop walks **plain
 hashtables/PSCustomObjects** straight off the parsed YAML/JSON, and every new capability
@@ -155,7 +155,7 @@ same way it works today: read `executionMethodOverride` off the projected task, 
 ## 5. Concrete integration steps
 
 ### 5.1 Module & manifest
-- Decide module identity (see §7, open question). Recommendation: keep `azdo-dsc-lcm` as the
+- Decide module identity (see §7, open question). Recommendation: keep `DSC.PipelineRunner.Akkodis` as the
   module name (least disruptive for existing consumers/pipelines already pinned to it), but adopt
   `Dsc.PipelineRunner`'s manifest hygiene: drop `AzureDevOpsDsc*` from hard `RequiredModules`
   (already done here — confirm parity), add `PIPELINERUNNER_CACHE_DIRECTORY`-style generic env
@@ -181,35 +181,35 @@ same way it works today: read `executionMethodOverride` off the projected task, 
 
 ### 5.3 Engine & Actions (port wholesale)
 - Copy `Actions/`, `source/Private/Actions/`, `source/Private/Auth/` directories as-is.
-- Copy `source/Private/Runner/Start-DscRunner.ps1` → replaces `source/Private/LCM/Start-LCM.ps1`,
+- Copy `source/Private/Runner/Start-DscRunner.ps1` → replaces `source/Private/LCM/Start-DscRunner.ps1`,
   with these deltas on top of the upstream version:
   - Accept `ConfigurationMode` (`ApplyOnly`/`Audit`/`Enforce`) in addition to `Mode` (`Test`/`Set`),
-    matching this repo's existing `Start-LCM` signature — `ConfigurationMode` maps to `Mode` exactly
+    matching this repo's existing `Start-DscRunner` signature — `ConfigurationMode` maps to `Mode` exactly
     as today's switch statement does, and is threaded into the report.
-  - Re-apply the `ApplyOnly` vs `Enforce` re-test/verify branching from this repo's `Start-LCM`
+  - Re-apply the `ApplyOnly` vs `Enforce` re-test/verify branching from this repo's `Start-DscRunner`
     (lines ~266–319 of the current file) — `Dsc.PipelineRunner` has no equivalent because it never
     had those modes; this is new logic layered onto the ported loop, not a port itself.
   - Keep `-ContinueOnError` / `$failedResources` cascading dependency-skip logic from this repo —
     `Dsc.PipelineRunner` doesn't have it.
-  - Read `executionMethodOverride` off the projected task (§4) the same way today's `Start-LCM` does.
+  - Read `executionMethodOverride` off the projected task (§4) the same way today's `Start-DscRunner` does.
 - Copy `source/Private/Runner/*.ps1` (function-language + condition-safety files) wholesale.
 - Copy `source/Classes/DscMethodResult.ps1`, `source/Private/Actions/ConvertTo-DscMethodResult.ps1`.
 
 ### 5.4 Time-based enforcement (port + rewire)
-- Copy `Get-LCMConfigurationMode.ps1` and `Get-HoursDifference.ps1` verbatim into
+- Copy `Get-PipelineRunnerConfigurationMode.ps1` and `Get-HoursDifference.ps1` verbatim into
   `source/Private/LCM/` (or fold under `Private/Configuration/` to match the new repo's layout —
   pick one and apply consistently, see §7).
 - `Invoke-DscLCM.ps1` (this repo's generic entry point) keeps resolving
-  `ConfigurationMode` via `Get-LCMConfigurationMode` before calling the ported `Start-DscRunner`,
-  exactly as it does today against `Start-LCM`.
-- Add `LCMConfigurationMode` / `ChangeWindows` to the `PipelineRunnerSettings` schema section of
+  `ConfigurationMode` via `Get-PipelineRunnerConfigurationMode` before calling the ported `Start-DscRunner`,
+  exactly as it does today against `Start-DscRunner`.
+- Add `PipelineConfigurationMode` / `ChangeWindows` to the `PipelineRunnerSettings` schema section of
   the wiki docs being ported (§5.6), since `Dsc.PipelineRunner`'s `PipelineRunnerSettings` page
   doesn't know about it yet.
 
 ### 5.5 Stub & composite resources (port + integrate)
-- Copy `LCM Rules/Custom/Merge-StubResources.ps1` verbatim; it already operates on the
+- Copy `Pipeline Rules/Custom/Merge-StubResources.ps1` verbatim; it already operates on the
   `[DSCStub]` type-check, so it's untouched by the engine swap.
-- `LCM Rules/Custom/Sort-DependsOn.ps1`: diff against `Pipeline Rules/Custom/Sort-DependsOn.ps1`
+- `Pipeline Rules/Custom/Sort-DependsOn.ps1`: diff against `Pipeline Rules/Custom/Sort-DependsOn.ps1`
   (125 lines vs. this repo's current version) — the new one has presumably picked up fixes (the
   circular-dependency backtracking bug mentioned in the new repo's CHANGELOG, §3). Port the new
   version, then re-verify stub/composite name resolution (`getFullResourceName()`,
@@ -247,16 +247,16 @@ same way it works today: read `executionMethodOverride` off the projected task, 
   Keep every existing `Tests/LCM/DSCConfiguration/Classes/*.tests.ps1` (stub/composite/class
   coverage) — these have no counterpart upstream and are the regression net for §2.
 - New tests required (no upstream equivalent): `Expand-CompositeResources`, `ConvertTo-PipelineTask`,
-  `Get-LCMConfigurationMode` × new engine (Scheduled mode driving DscV3, Scheduled mode driving a
+  `Get-PipelineRunnerConfigurationMode` × new engine (Scheduled mode driving DscV3, Scheduled mode driving a
   remote target), stub-merge × notify/using interaction, composite resource × dependency sort.
 
 ## 6. Suggested phase/PR breakdown
 
 1. **Plumbing, no behavior change.** Port `Actions/`, `Private/Actions/`, `Private/Auth/`,
    `Private/DatumHelper/*` additions, `Resolve-CacheDirectory`, `ConvertTo-CaseInsensitiveHashtable`,
-   `DscMethodResult`. Nothing wired into `Start-LCM` yet; ships dead code behind no callers, but
+   `DscMethodResult`. Nothing wired into `Start-DscRunner` yet; ships dead code behind no callers, but
    gets the large mechanical diff landed and reviewed on its own.
-2. **Engine swap.** Replace `Start-LCM` with the ported `Start-DscRunner` (+ `ApplyOnly`/`Enforce`
+2. **Engine swap.** Replace `Start-DscRunner` with the ported `Start-DscRunner` (+ `ApplyOnly`/`Enforce`
    re-test branching, `ContinueOnError`), still consuming **hashtables** (no class changes yet) —
    proves the engine port is behavior-preserving for every existing non-stub/composite/scheduled
    config before classes re-enter the picture.
@@ -264,7 +264,7 @@ same way it works today: read `executionMethodOverride` off the projected task, 
    re-point `Invoke-DscLCM`/`Start-DscRunner` call site to consume the class pipeline's output.
 4. **Stub + composite.** `Merge-StubResources` port, `Expand-CompositeResources` new rule, wired
    into the pipeline before notify/sort.
-5. **Scheduled enforcement.** `Get-LCMConfigurationMode` port + `ConfigurationMode` threading.
+5. **Scheduled enforcement.** `Get-PipelineRunnerConfigurationMode` port + `ConfigurationMode` threading.
 6. **New capabilities exposed.** Remote targets, credentials, notify/using, engine selection,
    function language — these mostly "just work" once step 2 lands, so this phase is chiefly docs +
    tests confirming they interact correctly with stub/composite/scheduled configs (§5.8's new
@@ -278,12 +278,12 @@ review stays tractable — this is a large, multi-week merge, not a single patch
 
 ## 7. Open questions for the user
 
-- **Module identity:** keep `azdo-dsc-lcm` as the shipped name, or rename to align with
+- **Module identity:** keep `DSC.PipelineRunner.Akkodis` as the shipped name, or rename to align with
   `Dsc.PipelineRunner` (and if so, is Azure DevOps still the primary/only Connect provider you
   care about, or is the provider-agnostic `Invoke-DscRunner` entry point a goal in its own right)?
 - **"LCM" terminology:** `Dsc.PipelineRunner` deliberately scrubbed "LCM" from its docs/code
-  because it isn't a Windows DSC LCM. This repo's whole vocabulary (`Start-LCM`,
-  `Get-LCMConfigurationMode`, `LCMConfigurationMode`, `Invoke-AZDoLCM`) is built on that term. Keep
+  because it isn't a Windows DSC LCM. This repo's whole vocabulary (`Start-DscRunner`,
+  `Get-PipelineRunnerConfigurationMode`, `PipelineConfigurationMode`, `Invoke-AZDoLCM`) is built on that term. Keep
   it (it's this repo's established public surface) or rename during the merge?
 - **Test-tree layout:** `Tests/LCM/...` vs. `Tests/PipelineRunner/...` — align on one.
 - **`Invoke-PreParseRules -Settings`:** confirm `AllowExecutionScripts` gating is desired for this
@@ -298,15 +298,15 @@ review stays tractable — this is a large, multi-week merge, not a single patch
 
 | This repo (today) | Action | `Dsc.PipelineRunner` source |
 |---|---|---|
-| `source/Private/LCM/Start-LCM.ps1` | Replace with ported + `ApplyOnly`/`Enforce`/`ContinueOnError` re-added | `source/Private/Runner/Start-DscRunner.ps1` |
-| `source/Private/LCM/Get-LCMConfigurationMode.ps1` | Keep, unchanged | *(none — new)* |
+| `source/Private/LCM/Start-DscRunner.ps1` | Replace with ported + `ApplyOnly`/`Enforce`/`ContinueOnError` re-added | `source/Private/Runner/Start-DscRunner.ps1` |
+| `source/Private/LCM/Get-PipelineRunnerConfigurationMode.ps1` | Keep, unchanged | *(none — new)* |
 | `source/Private/Configuration/Get-HoursDifference.ps1` | Keep, unchanged | *(none — new)* |
 | `source/Classes/00{0-4}.*.ps1` | Extend (see §5.2) | `source/Classes/DscMethodResult.ps1` (additive, not a replacement) |
 | `source/Enum/000.ExecutionMethod.ps1` | Keep, unchanged | *(none — new)* |
-| `LCM Rules/Custom/Merge-StubResources.ps1` | Keep, unchanged | *(none — new)* |
-| `LCM Rules/Custom/Sort-DependsOn.ps1` | Port newer version, re-verify | `Pipeline Rules/Custom/Sort-DependsOn.ps1` |
-| `LCM Rules/PreParse/Test-CircularReferences.ps1` | Diff + take fixes | `Pipeline Rules/PreParse/Test-CircularReferences.ps1` |
-| `LCM Rules/PreParse/Test-ResourcesForIncorrectProperties.ps1` | Diff + take fixes | `Pipeline Rules/PreParse/Test-ResourcesForIncorrectProperties.ps1` |
+| `Pipeline Rules/Custom/Merge-StubResources.ps1` | Keep, unchanged | *(none — new)* |
+| `Pipeline Rules/Custom/Sort-DependsOn.ps1` | Port newer version, re-verify | `Pipeline Rules/Custom/Sort-DependsOn.ps1` |
+| `Pipeline Rules/PreParse/Test-CircularReferences.ps1` | Diff + take fixes | `Pipeline Rules/PreParse/Test-CircularReferences.ps1` |
+| `Pipeline Rules/PreParse/Test-ResourcesForIncorrectProperties.ps1` | Diff + take fixes | `Pipeline Rules/PreParse/Test-ResourcesForIncorrectProperties.ps1` |
 | *(none)* | Add | `Pipeline Rules/Custom/Expand-NotifyDependsOn.ps1` |
 | *(none)* | Add | `Pipeline Rules/PreParse/Test-ExecutionScriptsAllowed.ps1` |
 | *(none)* | Add wholesale | `Actions/**` (Engine, Target, Source, Connect, Credential) |

@@ -37,7 +37,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: ${{ github.run_id }}
-          path: ./output/azdo-dsc-lcm/
+          path: ./output/DSC.PipelineRunner.Akkodis/
 
   release:
     needs: build  

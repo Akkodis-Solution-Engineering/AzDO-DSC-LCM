@@ -19,7 +19,7 @@ task Increment_Version {
 
     # Update the module manifest
     $templatePath = "$PSScriptRoot\..\..\source\template.ps1"
-    $moduleManifestPath = "$PSScriptRoot\..\..\source\azdo-dsc-lcm.psd1"
+    $moduleManifestPath = "$PSScriptRoot\..\..\source\DSC.PipelineRunner.Akkodis.psd1"
 
     if (Test-Path -Path $moduleManifestPath) {
         Remove-Item -Path $moduleManifestPath

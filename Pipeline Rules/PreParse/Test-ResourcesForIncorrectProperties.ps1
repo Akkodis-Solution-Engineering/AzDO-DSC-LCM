@@ -1,0 +1,162 @@
+<#
+.SYNOPSIS
+    Tests resources for incorrect properties.
+
+.DESCRIPTION
+    This script tests each resource in the provided pipeline resources for incorrect properties. It checks if the required keys (name, type, and properties) exist for each task and throws an error if any of these keys are missing. It also performs additional checks such as verifying if the resource exists, if the properties are correct, if the property values are of the correct type, if mandatory properties are not null, and if the property values match the selected values.
+
+.PARAMETER PipelineResources
+    An array of pipeline resources to be tested.
+
+.NOTES
+    - This script assumes that the pipeline resources are objects with the following properties:
+        - type: The type of the resource.
+        - name: The name of the resource.
+        - properties: The properties of the resource.
+    - This script requires the Get-DscResource cmdlet to be available.
+
+.EXAMPLE
+    $resources = @(
+        [PSCustomObject]@{
+            type = 'MyResourceType'
+            name = 'MyResource'
+            properties = @{
+                Property1 = 'Value1'
+                Property2 = 'Value2'
+            }
+        }
+        [PSCustomObject]@{
+            type = 'AnotherResourceType'
+            name = 'AnotherResource'
+            properties = @{
+                Property1 = 'Value1'
+                Property2 = 'Value2'
+            }
+        }
+    )
+
+    Test-ResourcesForIncorrectProperties -PipelineResources $resources
+#>
+# Write-Host is used deliberately for the operator-facing pass/fail banner (colored,
+# always visible on the host running the pre-parse check). It is not diagnostic output.
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '',
+    Justification = 'Intentional colored operator-facing pass/fail banner, not redirectable diagnostic output.')]
+param(
+    [Object[]]$PipelineResources,
+
+    # Resolved PipelineRunnerSettings, forwarded by Invoke-PreParseRules to every rule (#57 §2).
+    # Unused by this rule; accepted for signature compatibility.
+    [hashtable]$Settings
+)
+
+# Collect every validation error across all resources, then fail once at the end.
+# Previously $isFail persisted across iterations and a `break` aborted the loop, so
+# only the first offending resource was ever reported.
+$allErrors = [System.Collections.Generic.List[string]]::new()
+
+Write-Host "[Test-ResourcesForIncorrectProperties] Testing Resources for Incorrect Properties:" -ForegroundColor Green
+
+# Iterate Through each of the Resources
+ForEach ($task in $PipelineResources)
+{
+
+    Write-Host "[Test-ResourcesForIncorrectProperties] Testing Resource: [$($task.type)/$($task.name)]" -ForegroundColor Green
+
+    # Track failures for this resource only, so a missing key skips the deeper
+    # checks for this resource without aborting validation of the remaining ones.
+    $resourceHasError = $false
+
+    #
+    # The name, type and properties keys are required for each task.
+
+    # Report an error if the properties key does not exist
+    if ($null -eq $task.properties) {
+        $allErrors.Add("[DSC.PipelineRunner.Akkodis] 'Properties' key does not exist for resource: [$($task.type)/$($task.name)]")
+        $resourceHasError = $true
+    }
+
+    # Report an error if the name key does not exist
+    if ($null -eq $task.name) {
+        $allErrors.Add("[DSC.PipelineRunner.Akkodis] 'Name' key does not exist for resource: [$($task.type)/$($task.name)]")
+        $resourceHasError = $true
+    }
+
+    # If a required key is missing, skip the deeper checks for THIS resource only
+    # (continue to the next resource rather than break out of the whole loop).
+    if ($resourceHasError) {
+        Write-Host "[DSC.PipelineRunner.Akkodis] Skipping [$($task.type)/$($task.name)]" -ForegroundColor Yellow
+        continue
+    }
+
+    # Extract the module name and resource type from the task's type property
+    $module = $task.type.Split("/")[0]
+    $resourceType = $task.type.Split("/")[1]
+
+    # Perform a lookup of the resource:
+    $resource = Get-DscResource -Name $resourceType -Module $module
+
+    # If the resource is not found, report an error and skip its property checks
+    if ($null -eq $resource) {
+        $allErrors.Add("[DSC.PipelineRunner.Akkodis] Resource [$resourceType] was not found in module [$module]")
+        continue
+    }
+
+    # If the resource is found, check to see if the properties are correct
+    $properties = $task.properties
+
+    # Iterate through each of the properties
+    ForEach ($property in $properties.keys)
+    {
+        # If the property does not exist in the resource, report an error
+        if ($Property -notin $resource.Properties.Name) {
+            $allErrors.Add("[DSC.PipelineRunner.Akkodis] Property [$($property)] does not exist in resource [$resourceType] in module [$module]")
+        }
+        # Ensure that the property is the correct type to the resource.
+        $resourceProperty       = $resource.Properties | Where-Object { $_.Name -eq $property }
+        $resourcePropertyType   = $resourceProperty.PropertyType -replace "(\[)|(\])",""
+
+        $configurationPropertyValue  = $properties[$property]
+
+        <#
+        # If the property is not the correct type, report an error
+        if ($configurationPropertyValue.GetType().Name -ne $resourcePropertyType) {
+            $allErrors.Add("[DSC.PipelineRunner.Akkodis] Property [$($property)] is not the correct type in resource [$resourceType] in module [$module]")
+        }
+        #>
+
+        # If the ResourceProperty is mandatory, ensure that the propertyValue is not null
+        if ($resourceProperty.IsMandatory -and $null -eq $configurationPropertyValue) {
+            $allErrors.Add("[DSC.PipelineRunner.Akkodis] Property [$($property)] is mandatory in resource [$resourceType] in module [$module]")
+        }
+
+        # If the Property is a caculated variable, ignore the property
+        if ($configurationPropertyValue -match "\$") {
+            Write-Host "[DSC.PipelineRunner.Akkodis] Property [$($property)] is a caculated variable in resource [$resourceType] in module [$module]" -ForegroundColor Yellow
+            continue
+        }
+
+        # If the ResourceProperty has selected values, ensure that the propertyValue is in the list.
+        # The offending value is deliberately NOT interpolated into the diagnostic: property
+        # values routinely carry secrets, and this log is readable by a wider audience than the
+        # configuration repository (#34). Name the property, the resource and the permitted set;
+        # an operator who needs the value can read the configuration they already have access to.
+        if ($resourceProperty.Values -and $configurationPropertyValue -notin $resourceProperty.Values) {
+            $allErrors.Add("[DSC.PipelineRunner.Akkodis] Property [$($property)] does not match the selected values in resource [$resourceType][$property]. Permitted values: $($resourceProperty.Values -join ', ')")
+            # Opt-in breadcrumb on the verbose stream only, redacted for sensitive property names.
+            Write-Verbose "[DSC.PipelineRunner.Akkodis] Property [$property] provided value: $(Protect-SensitiveValue -Name $property -Value $configurationPropertyValue)"
+        }
+
+    }
+
+}
+
+# Emit every collected error, then stop the run once — so an operator sees all
+# offending resources/properties in a single pass instead of fix-and-rerun.
+if ($allErrors.Count -gt 0) {
+    foreach ($validationError in $allErrors) {
+        Write-Host $validationError -ForegroundColor Red
+    }
+    Throw "[Test-ResourcesForIncorrectProperties] Tests Failed ($($allErrors.Count) issue(s)). Stopping runner."
+} else {
+    Write-Host "[Test-ResourcesForIncorrectProperties] Tests Passed" -ForegroundColor Green
+}

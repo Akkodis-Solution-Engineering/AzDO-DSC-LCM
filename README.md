@@ -48,11 +48,11 @@ This LCM utilizes Datum from Gael Colas to streamline configuration. For more in
         GroupName: $GroupName
     ```
 
-1. __Modular LCM Formatting and Validation Rules__: Incorporate modular scripts stored in the `\LCM Rules\` directory into the module build process. These scripts are responsible for validating and formatting configuration resources to meet specific requirements. They can be modified and extended as needed. The current set of scripts includes:
+1. __Modular LCM Formatting and Validation Rules__: Incorporate modular scripts stored in the `\Pipeline Rules\` directory into the module build process. These scripts are responsible for validating and formatting configuration resources to meet specific requirements. They can be modified and extended as needed. The current set of scripts includes:
 
-    - `LCM Rules\PreParse\Test-CircularReferences.ps1`: Checks for circular references within resources. If this script detects an error, the LCM will not apply any changes.
-    - `LCM Rules\PreParse\Test-ResourceForIncorrectProperties`: Validates resource properties against documented specifications. Errors prevent LCM from applying changes.
-    - `LCM Rules\Custom\Sort-DependsOn.ps1`: Orders resources in the YAML file based on their `dependsOn` property. This script is mandatory and cannot be bypassed.
+    - `Pipeline Rules\PreParse\Test-CircularReferences.ps1`: Checks for circular references within resources. If this script detects an error, the LCM will not apply any changes.
+    - `Pipeline Rules\PreParse\Test-ResourceForIncorrectProperties`: Validates resource properties against documented specifications. Errors prevent LCM from applying changes.
+    - `Pipeline Rules\Custom\Sort-DependsOn.ps1`: Orders resources in the YAML file based on their `dependsOn` property. This script is mandatory and cannot be bypassed.
 
 1. __Versioned Configuration__: Ensure all versions are managed by the LCM to avoid unforeseen issues as new features are introduced.
 
@@ -61,7 +61,7 @@ This LCM utilizes Datum from Gael Colas to streamline configuration. For more in
     ```yaml
     LCMConfigSettings:
       ConfigurationVersion: 1.0
-      AZDOLCMVersion: 1.0
+      PipelineRunnerVersion: 1.0
       DSCResourceVersion: 1.0
     ```
 
@@ -75,12 +75,12 @@ This LCM utilizes Datum from Gael Colas to streamline configuration. For more in
     Execution Precedence: The following hierarchy determines the order in which the `ConfigurationMode` is applied:
 
     1. `Invoke-AZDoLCM -ConfigurationMode` Parameter. Setting this property will override the configuration.
-    1. `LCMConfigurationMode.LCMConfigurationMode`. Configuring this property will establish it as the default setting. The possible values are 'ApplyOnly', 'Audit', 'Enforce', and 'Scheduled'.
-    1. `LCMConfigurationMode.LCMConfigurationMode.ChangeWindows`. Setting up Change Windows will define the times in UTC when the LCM can operate in various modes. _If no change window is specified, it will revert to the default mode of 'Audit'. In cases of overlapping time windows, the first window will be chosen, and a warning will be issued._
+    1. `PipelineConfigurationMode.PipelineConfigurationMode`. Configuring this property will establish it as the default setting. The possible values are 'ApplyOnly', 'Audit', 'Enforce', and 'Scheduled'.
+    1. `PipelineConfigurationMode.PipelineConfigurationMode.ChangeWindows`. Setting up Change Windows will define the times in UTC when the LCM can operate in various modes. _If no change window is specified, it will revert to the default mode of 'Audit'. In cases of overlapping time windows, the first window will be chosen, and a warning will be issued._
 
         ``` Text
-        [Get-LCMConfigurationMode] Current time 00:00 is within Change Window: 23:00 - 02:00. Setting LCM Configuration Mode to ApplyOnly.
-        [Get-LCMConfigurationMode] Overlapping Change Windows detected in Datum Configuration LCMConfigurationMode. The first matching window takes precedence.
+        [Get-PipelineRunnerConfigurationMode] Current time 00:00 is within Change Window: 23:00 - 02:00. Setting LCM Configuration Mode to ApplyOnly.
+        [Get-PipelineRunnerConfigurationMode] Overlapping Change Windows detected in Datum Configuration PipelineConfigurationMode. The first matching window takes precedence.
         ```
 
         Change Window Syntax:
@@ -95,7 +95,7 @@ This LCM utilizes Datum from Gael Colas to streamline configuration. For more in
       Example:
 
       ```yaml
-      LCMConfigurationMode:
+      PipelineConfigurationMode:
           # The LCM Configuration Mode can be one of the following: ApplyOnly, Audit, Enforce, Scheduled
           ConfigurationMode: Audit
           # Define a Change Window Array that specifies when the configuration can be applied.
@@ -319,7 +319,7 @@ In the realm of configuration, there are specialized commands designed to modify
 
 1. __Ensure that the Agent Pools have required dependencies__
 
-    Ensure that the Agent Pool is equipped with all necessary PowerShell module dependencies as specified in the module manifest file [`source\azdo-dsc-lcm.psd1`](.\source\azdo-dsc-lcm.psd1). These dependencies are crucial for the proper functioning of the Local Configuration Manager (LCM) within your Azure DevOps environment.
+    Ensure that the Agent Pool is equipped with all necessary PowerShell module dependencies as specified in the module manifest file [`source\DSC.PipelineRunner.Akkodis.psd1`](.\source\DSC.PipelineRunner.Akkodis.psd1). These dependencies are crucial for the proper functioning of the Local Configuration Manager (LCM) within your Azure DevOps environment.
 
     To install these required modules, execute the following command for each module listed in the manifest:
 
@@ -330,7 +330,7 @@ In the realm of configuration, there are specialized commands designed to modify
     __Process:__
 
     1. __Review the Module Manifest:__
-    - Open the `source\azdo-dsc-lcm.psd1` file to identify all modules listed under the `RequiredModules` section.
+    - Open the `source\DSC.PipelineRunner.Akkodis.psd1` file to identify all modules listed under the `RequiredModules` section.
     - Take note of each module name and version specified.
 
     1. __Install Each Module:__
@@ -481,7 +481,7 @@ The LCM's execution engine (Datum compilation, configuration validation, resourc
 If your configuration targets a different (or no) authenticated backend, call `Invoke-DscLCM` directly. It requires no `AzureDevOpsDsc` or `AzureDevOpsDsc.Common` install, needs no `AZDODSC_CACHE_DIRECTORY` environment variable (that's only read by the `AzureDevOpsDsc` resources themselves), and performs no authentication of its own — authenticate to whatever your configuration's resources require using that module's own mechanism before calling it.
 
 ```powershell
-Import-Module azdo-dsc-lcm
+Import-Module DSC.PipelineRunner.Akkodis
 
 # Authenticate to whatever DSC resource module your configuration's `type:` fields reference,
 # using that module's own mechanism, before calling Invoke-DscLCM.
@@ -494,4 +494,4 @@ $params = @{
 Invoke-DscLCM @params
 ```
 
-`Invoke-AZDoLCM` remains the recommended entry point for Azure DevOps DSC configurations — it now checks for `AzureDevOpsDsc.Common` when called, rather than requiring it at `Import-Module` time, so `Import-Module azdo-dsc-lcm` no longer fails in environments that only need the generic engine.
+`Invoke-AZDoLCM` remains the recommended entry point for Azure DevOps DSC configurations — it now checks for `AzureDevOpsDsc.Common` when called, rather than requiring it at `Import-Module` time, so `Import-Module DSC.PipelineRunner.Akkodis` no longer fails in environments that only need the generic engine.

@@ -109,7 +109,7 @@ function Start-DscRunner {
 
     $infoTag = 'DSC.PipelineRunner.Akkodis'
 
-    # ConfigurationMode -> engine Mode, exactly as this repo's original Start-DscRunner (formerly Start-LCM) always mapped it.
+    # ConfigurationMode -> engine Mode, exactly as this repo's original Start-DscRunner always mapped it.
     $Mode = $( switch ($ConfigurationMode) {
         "ApplyOnly" { "Set" }
         "Audit"     { "Test" }
@@ -600,7 +600,7 @@ function Start-DscRunner {
 
         # This final human-facing run summary uses Write-Host (not Write-Information like the
         # per-resource lines above) so it always reaches the console/pipeline log regardless of
-        # $InformationPreference - matching the original Start-LCM's summary behavior.
+        # $InformationPreference - matching the original Start-DscRunner's summary behavior.
         Write-Host "DSC Configuration Report: $FilePath"
         Write-Host "Run Status: $runStatus"
 

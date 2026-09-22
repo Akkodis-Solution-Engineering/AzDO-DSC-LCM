@@ -515,7 +515,7 @@ Describe "Start-DscRunner Function Tests" -Tag Unit, MockedClass {
 
     Context "error handling and edge cases" {
 
-        It "should print a non-terminating error when the LCM fails to set a resource" {
+        It "should print a non-terminating error when the engine fails to set a resource" {
 
             Mock -CommandName Write-Error -ParameterFilter { $Message -like "*Failed to apply changes with 'Set' method*" } -Verifiable
             Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Set" } -Verifiable -MockWith {

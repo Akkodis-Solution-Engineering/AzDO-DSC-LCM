@@ -1,0 +1,153 @@
+name: Release
+
+# Rebased on ZanattaMichael/Dsc.PipelineRunner's release methodology: releases are tag-driven.
+# Pushing a tag of the form vX.Y.Z (or vX.Y.Z-preview0001 for a prerelease) is the single
+# action that cuts a release; the tag is the authoritative source of the module version and
+# is baked into the manifest at build time via $env:ModuleVersion (see
+# .build/tasks/3.Increment-Version.ps1).
+#
+# Release gates, in order. A *full* release (vX.Y.Z) packages only when all of them pass:
+#   1. validate    - the tag is a valid version tag and points at a commit contained in main.
+#   2. test suite  - the full CI test suite runs as a release gate. Each suite is REUSED from
+#                    the workflow that already maintains it (via workflow_call) rather than
+#                    duplicated here, so the release runs exactly the tests that gate a PR.
+#
+# Preview releases (vX.Y.Z-<suffix>): the full test suite STILL runs, but the package job
+# proceeds regardless of the suite results - a preview can ship despite in-progress or flaky
+# tests. The validate gate (a well-formed version tag contained in main) always holds, in
+# both modes, so a broken or off-main tag can never package.
+#
+# Unlike upstream, this workflow does not publish anywhere (no GitHub Release object, no
+# PowerShell Gallery). It builds and packages the module with the tag's version baked in and
+# uploads it as a workflow artifact - a "local" release, staying within this Actions run for
+# whoever needs to download and distribute it manually.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate Release Tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.derive.outputs.version }}
+      isPrerelease: ${{ steps.derive.outputs.isPrerelease }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Derive module version from tag
+        id: derive
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag -replace '^v', ''
+          # Accept X.Y.Z and X.Y.Z-<prerelease>.
+          if ($version -notmatch '^\d+\.\d+\.\d+(-[A-Za-z0-9]+)?$') {
+              Write-Error "Tag '$tag' is not a valid version tag. Expected vX.Y.Z (e.g. v1.2.3) or vX.Y.Z-<prerelease> (e.g. v1.2.3-preview0001)."
+              exit 1
+          }
+          $isPrerelease = $version.Contains('-')
+          Write-Host "Building version $version (from tag $tag). Prerelease: $isPrerelease"
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "isPrerelease=$($isPrerelease.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      # A tag can be pushed pointing at any commit, including one that never went through the
+      # CI suite on main. Refuse to release from such a tag.
+      - name: Verify tag is on main
+        shell: pwsh
+        run: |
+          git fetch origin +refs/heads/main:refs/remotes/origin/main --quiet
+          git merge-base --is-ancestor HEAD origin/main
+          if ($LASTEXITCODE -ne 0) {
+              Write-Error "Tag '${{ github.ref_name }}' does not point at a commit contained in main. Releases must be tagged from main."
+              exit 1
+          }
+          Write-Host "Tag commit is contained in main."
+
+  # ---- Release gate: the full test suite, reused from the workflows that maintain it. ----
+  # For a full release every gate below must pass before packaging runs. For a prerelease the
+  # package job's `if` lets it proceed regardless of these results (see below), so the suite
+  # still runs on a preview but does not stop the package from being built.
+
+  unit-tests:
+    name: Unit Tests & Coverage (gate)
+    needs: validate
+    uses: ./.github/workflows/Main.CodeCoverage.yml
+
+  integration-tests:
+    name: Integration Tests, Self-Hosted (gate)
+    needs: validate
+    uses: ./.github/workflows/Integration-SelfHosted.yml
+
+  package:
+    name: Build and Package (local artifact only)
+    needs:
+      - validate
+      - unit-tests
+      - integration-tests
+    # Full release: package only when validate AND every test gate succeeded.
+    # Prerelease: package when validate succeeded, regardless of the test gate results
+    # (the suite still ran - it just does not stop the package for a preview).
+    if: >-
+      ${{
+        always() &&
+        needs.validate.result == 'success' &&
+        (
+          needs.validate.outputs.isPrerelease == 'true' ||
+          (
+            needs.unit-tests.result == 'success' &&
+            needs.integration-tests.result == 'success'
+          )
+        )
+      }}
+    runs-on: windows-latest
+    env:
+      # $env:ModuleVersion has to be set before the *first* `build` task runs (not just before
+      # pack), since Increment_Version reads it to bake the tag's version into the manifest
+      # instead of auto-incrementing. Setting it at job level makes it active for every step.
+      ModuleVersion: ${{ needs.validate.outputs.version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download PowerShell Dependencies
+        shell: pwsh
+        run: Install-Module Datum, Datum.InvokeCommand, powershell-yaml, PSDesiredStateConfiguration -Force -Scope CurrentUser -SkipPublisherCheck
+
+      - name: Build module
+        shell: pwsh
+        run: .\Build.ps1 -ResolveDependency -Tasks build
+
+      - name: Package module
+        shell: pwsh
+        run: .\Build.ps1 -Tasks pack
+
+      # No GitHub Release, no PowerShell Gallery publish - this is a local release only. The
+      # packaged module stays within this Actions run as a downloadable artifact.
+      - name: Upload release package
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-package-${{ github.ref_name }}
+          path: |
+            output/DSC.PipelineRunner.Akkodis.zip
+            output/DSC.PipelineRunner.Akkodis/**
+          if-no-files-found: warn
+          retention-days: 30

@@ -1,0 +1,30 @@
+# Runs the Integration suite on a self-hosted runner, i.e. one with the actual DSC engine(s)
+# and any other environment-specific dependencies the hosted-agent Main.IntergrationTests.yml
+# suite can't rely on. Used as a release gate by Release.yml; adjust the `runs-on` label below
+# to match the runner label/group actually registered for this repository.
+name: Integration Tests (Self-Hosted)
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  integration:
+    name: Integration Suite
+    # TODO: adjust to match your registered self-hosted runner's label(s).
+    runs-on: [self-hosted]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download PowerShell Dependencies
+        shell: pwsh
+        run: Install-Module Datum, Datum.InvokeCommand, powershell-yaml, PSDesiredStateConfiguration -Force -Scope CurrentUser -SkipPublisherCheck
+
+      - name: Perform a Pester Test to ensure that the .\tests.ps1 script exists
+        shell: pwsh
+        run: Test-Path .\tests.ps1 | Should -be $true
+
+      - name: Run Integration tests
+        shell: pwsh
+        run: . .\tests.ps1 -type Integration

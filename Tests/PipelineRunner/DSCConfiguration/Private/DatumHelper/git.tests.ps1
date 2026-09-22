@@ -10,6 +10,11 @@ Describe 'git Function Tests' -Tag Unit {
         $preParseFilePath = (Get-FunctionPath 'git.ps1') | Where-Object { $_.FullName -like '*DatumHelper*' } | Select-Object -First 1 -ExpandProperty FullName
         . $preParseFilePath
 
+        # git wraps a JITToken into a Basic-auth header via ConvertTo-BasicAuthCredential; that
+        # is a module Private function normally already in scope when this file runs inside the
+        # imported module, so it must be dot-sourced here too.
+        . (Get-FunctionPath 'ConvertTo-BasicAuthCredential.ps1').FullName
+
         Mock Get-Command {
             
             return @{

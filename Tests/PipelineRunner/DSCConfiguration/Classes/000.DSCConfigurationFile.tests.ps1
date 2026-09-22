@@ -103,10 +103,11 @@ resources:
             Mock SetVariables { param($Source) return $null }
         }
 
-        It "Should return null for parameters, variables, resources" {
+        It "Should return null for resources when ConvertTo-Resource returns null" {
+            # parameters/variables are now assigned straight from the parsed file (Load no
+            # longer routes them through GetParameterValues/SetVariables - see 000.DSCConfigurationFile.ps1),
+            # so only resources (still parsed via ConvertTo-Resource) can be forced null here.
             $configFile = [DSCConfigurationFile]::new($mockYamlFile)
-            $configFile.parameters | Should -BeNullOrEmpty
-           # $configFile.variables | Should -BeNullOrEmpty
             $configFile.resources | Should -BeNullOrEmpty
         }
 

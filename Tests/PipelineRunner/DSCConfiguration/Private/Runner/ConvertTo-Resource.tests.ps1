@@ -10,9 +10,19 @@ Describe "ConvertTo-Resource" -Tag Unit, PipelineRunner, MockedClass {
         $DSCStub = (Get-FunctionPath '003.DSCStub.ps1').FullName
         $DSCCompositeResource = (Get-FunctionPath '004.DSCCompositeResource.ps1').FullName
 
+        # DSC_Resource references the [ExecutionMethod] enum, which is normally already loaded
+        # when the module is imported as a whole; dot-source it here too since this file loads
+        # the classes individually.
+        Import-Enums | ForEach-Object { . $_.FullName }
+
+        # Stubbed out so DSCCompositeResource's [DSCConfigurationFile]::New($linkedFileName)
+        # call doesn't need a real configuration file on disk; constructors mirror the real
+        # class's signatures (see source/Classes/000.DSCConfigurationFile.ps1).
         class DSCConfigurationFile {
             [string]$mock = "Mock"
-            DSCConfigurationFile ([string]$filePath, [bool]$isComposite) {    
+            DSCConfigurationFile ([string]$configurationFile) {
+            }
+            DSCConfigurationFile ([string]$configurationFile, [string]$DSCCompositeResourcePath) {
             }
         }
 

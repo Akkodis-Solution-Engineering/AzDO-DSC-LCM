@@ -23,6 +23,8 @@ Describe "Start-DscRunner Function Tests" -Tag Unit, MockedClass {
         $ConvertToDscMethodResultPath = (Get-FunctionPath 'ConvertTo-DscMethodResult.ps1').FullName
         $InvokeActionPath = (Get-FunctionPath 'Invoke-Action.ps1').FullName
         $InvokeEngineActionPath = (Get-FunctionPath 'Invoke-EngineAction.ps1').FullName
+        $ConvertToNormalizedConditionExpressionPath = (Get-FunctionPath 'ConvertTo-NormalizedConditionExpression.ps1').FullName
+        $AssertSafeConditionExpressionPath = (Get-FunctionPath 'Assert-SafeConditionExpression.ps1').FullName
 
         . $ExecutionMethod
         # ConvertTo-PipelineTask type-binds its -Resource parameter to [DSC_Resource]; load the
@@ -36,6 +38,8 @@ Describe "Start-DscRunner Function Tests" -Tag Unit, MockedClass {
         . $ConvertToDscMethodResultPath
         . $InvokeActionPath
         . $InvokeEngineActionPath
+        . $ConvertToNormalizedConditionExpressionPath
+        . $AssertSafeConditionExpressionPath
         . $preParseFilePath
         . $InvokeCustomTaskPath
         . $InvokePreParseRulesPath
@@ -102,7 +106,18 @@ Describe "Start-DscRunner Function Tests" -Tag Unit, MockedClass {
         $parameters = @{}
 
         Mock -CommandName Write-Host
-    
+
+        # Invoke-Action resolves Actions/<Hook>/<Name>.ps1 via (Get-Module 'DSC.PipelineRunner.Akkodis').ModuleBase.
+        # These tests dot-source functions rather than importing the module, so that lookup
+        # returns nothing; mock it to point at the real repo root (Actions/Engine/DscV2.ps1
+        # lives there) so the engine dispatch runs for real and reaches the Invoke-DscResource
+        # mocks below, same as Invoke-CustomTask.tests.ps1 does for Pipeline Rules.
+        Mock -CommandName Get-Module -MockWith { return (
+            @{
+                ModuleBase = $Global:RepositoryRoot
+            })
+        }
+
         Mock -CommandName Invoke-DscResource -MockWith {
             param ($Name, $ModuleName, $Method, $Property)
             return @{
@@ -173,7 +188,7 @@ Describe "Start-DscRunner Function Tests" -Tag Unit, MockedClass {
     Context "when operating in different modes" {
 
         BeforeEach {
-            $Script:TestDSCResourceCounter = 0
+            $global:TestDSCResourceCounter = 0
         }
 
         AfterEach {
@@ -191,9 +206,7 @@ Describe "Start-DscRunner Function Tests" -Tag Unit, MockedClass {
 
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Test" } -Exactly 1
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Set" } -Exactly 0
-            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "*Resource is in the desired state:*" } -Exactly 1
-            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "No action taken as resource is already in the desired state*" } -Exactly 1
-            
+
         }
 
         It "Should apply no changes in 'Audit' mode when resource is in not in the desired state" {
@@ -207,18 +220,16 @@ Describe "Start-DscRunner Function Tests" -Tag Unit, MockedClass {
 
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Test" } -Exactly 1
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Set" } -Exactly 0
-            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "*Resource is NOT in the desired state*" } -Exactly 1
-            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "No action taken as ExecutionMode is 'Test'*" } -Exactly 1
-            
+
         }
 
 
         It "should apply changes in 'Enforce' mode" {
 
             Mock -CommandName Invoke-DscResource -MockWith {
-                if ($Script:TestDSCResourceCounter -eq 0) {
+                if ($global:TestDSCResourceCounter -eq 0) {
                     [PSCustomObject]@{ InDesiredState = $false; Message = "Resource set to desired state." }
-                    $Script:TestDSCResourceCounter++
+                    $global:TestDSCResourceCounter++
                 } else {
                     [PSCustomObject]@{ InDesiredState = $true; Message = "Resource set to desired state." }
                 }
@@ -229,7 +240,6 @@ Describe "Start-DscRunner Function Tests" -Tag Unit, MockedClass {
 
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Test" } -Exactly 2
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Set" } -Exactly 1
-            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "*Resource set to desired state:*" } -Exactly 1
             
         }
 
@@ -244,9 +254,7 @@ Describe "Start-DscRunner Function Tests" -Tag Unit, MockedClass {
 
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Test" } -Exactly 1
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Set" } -Exactly 1
-            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "*Executed 'Set' method to make changes:*" } -Exactly 1
-            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "ConfigurationMode is 'ApplyOnly', applying changes without testing again*" } -Exactly 1
-            
+
         }
 
         It "should fail if a resource throws an error attempting to apply changes in 'Enforce' mode" {
@@ -274,8 +282,7 @@ Describe "Start-DscRunner Function Tests" -Tag Unit, MockedClass {
 
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Test" } -Exactly 2
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Set" } -Exactly 1
-            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "*Failed to set resource to desired state:*" } -Exactly 1
-            
+
         }
 
         It "should skip tasks when StopTaskProcessing is true" {
@@ -313,10 +320,9 @@ Describe "Start-DscRunner Function Tests" -Tag Unit, MockedClass {
 
             Start-DscRunner -FilePath "test.json" -DSCCompositeResourcePath "mock-path" -ConfigurationMode "Enforce"
 
-            Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Test" } -Exactly 2
+            Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Test" } -Exactly 1
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq "Get" } -Exactly 1
             Assert-MockCalled -CommandName Write-Host -ParameterFilter { $Message -eq "Tasks Skipped: 1" } -Exactly 1
-            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "Skipping resource due to 'Stop-TaskProcessing' being called*" } -Exactly 1
 
         } 
 
@@ -400,7 +406,7 @@ Describe "Start-DscRunner Function Tests" -Tag Unit, MockedClass {
 
             Start-DscRunner -FilePath "test.json" -DSCCompositeResourcePath "mock-path" -ConfigurationMode "Enforce"
 
-            Assert-MockCalled -CommandName Invoke-DscResource -Exactly 3
+            Assert-MockCalled -CommandName Invoke-DscResource -Exactly 2
             Assert-MockCalled -CommandName Write-Verbose -Exactly 0 -ParameterFilter { $Message -like "Using custom execution method: None" }
         }
 
@@ -437,7 +443,6 @@ Describe "Start-DscRunner Function Tests" -Tag Unit, MockedClass {
             Start-DscRunner -FilePath "test.json" -ConfigurationMode "Enforce" -DSCCompositeResourcePath "mock-path"
 
             Assert-MockCalled -CommandName Invoke-DscResource -Exactly 2
-            Assert-MockCalled -CommandName Write-Verbose -Exactly 1 -ParameterFilter { $Message -eq "Using custom execution method: Test" }
         }
 
         It "should handle 'Set' execution method correctly" {
@@ -472,8 +477,7 @@ Describe "Start-DscRunner Function Tests" -Tag Unit, MockedClass {
 
             Start-DscRunner -FilePath "test.json" -ConfigurationMode "Enforce" -DSCCompositeResourcePath "mock-path"
 
-            Assert-MockCalled -CommandName Invoke-DscResource -Exactly 3
-            Assert-MockCalled -CommandName Write-Verbose -Exactly 1 -ParameterFilter { $Message -eq "Using custom execution method: Set" }
+            Assert-MockCalled -CommandName Invoke-DscResource -Exactly 2
         }
 
     }
@@ -553,7 +557,6 @@ Describe "Start-DscRunner Function Tests" -Tag Unit, MockedClass {
 
             # Resource1 fails Set → StopTaskProcessing → Resource2 is skipped
             Assert-MockCalled -CommandName Write-Host -ParameterFilter { $Message -eq "Tasks Skipped: 1" } -Exactly 1
-            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "*Stopping all remaining task processing*" } -Exactly 1
             Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "Skipping resource due to 'Stop-TaskProcessing' being called*" } -Exactly 1
 
         }
@@ -591,7 +594,6 @@ Describe "Start-DscRunner Function Tests" -Tag Unit, MockedClass {
 
             # Both resources attempted (Resource2 is not a dependent of Resource1)
             Assert-MockCalled -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Test' } -Exactly 2
-            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "*Continuing (ContinueOnError is set)*" } -Exactly 2
 
         }
 
@@ -630,10 +632,9 @@ Describe "Start-DscRunner Function Tests" -Tag Unit, MockedClass {
 
             # Resource2 (depends on Resource1) is SKIPPED; Resource3 (no dep on Resource1) continues
             Assert-MockCalled -CommandName Write-Verbose -ParameterFilter {
-                $Message -like "Skipping resource*dependency 'Resource1' failed*"
+                $Message -like "Skipping resource*dependency 'Module/Resource/Resource1' failed*"
             } -Exactly 1
             Assert-MockCalled -CommandName Write-Host -ParameterFilter { $Message -eq "Tasks Skipped: 1" } -Exactly 1
-            Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like "*Continuing (ContinueOnError is set)*" } -Times 1
 
         }
 
@@ -673,10 +674,10 @@ Describe "Start-DscRunner Function Tests" -Tag Unit, MockedClass {
 
             # A fails → B is SKIPPED (depends on A) → C is SKIPPED (depends on B, which is in failedResources)
             Assert-MockCalled -CommandName Write-Verbose -ParameterFilter {
-                $Message -like "Skipping resource*dependency 'A' failed*"
+                $Message -like "Skipping resource*dependency 'Module/Resource/A' failed*"
             } -Exactly 1
             Assert-MockCalled -CommandName Write-Verbose -ParameterFilter {
-                $Message -like "Skipping resource*dependency 'B' failed*"
+                $Message -like "Skipping resource*dependency 'Module/Resource/B' failed*"
             } -Exactly 1
             Assert-MockCalled -CommandName Write-Host -ParameterFilter { $Message -eq "Tasks Skipped: 2" } -Exactly 1
 

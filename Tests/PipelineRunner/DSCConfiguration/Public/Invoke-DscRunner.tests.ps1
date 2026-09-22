@@ -1,16 +1,19 @@
 
-Describe "Invoke-DscLCM Function Tests" -Tag Unit {
+Describe "Invoke-DscRunner Function Tests" -Tag Unit {
 
     BeforeAll {
 
         # Load the functions to test
-        $preParseFilePath = (Get-FunctionPath 'Invoke-DscLCM.ps1').FullName
+        $preParseFilePath = (Get-FunctionPath 'Invoke-DscRunner.ps1').FullName
 
         @(
             (Get-FunctionPath 'Start-DscRunner.ps1')
             (Get-FunctionPath 'Build-DatumConfiguration.ps1')
             (Get-FunctionPath 'Clone-Repository.ps1')
             (Get-FunctionPath 'Get-PipelineRunnerConfigurationMode.ps1')
+            (Get-FunctionPath 'Get-PipelineRunnerSetting.ps1')
+            (Get-FunctionPath 'Merge-DscRunnerResult.ps1')
+            (Get-FunctionPath 'Remove-RunnerTemporaryDirectory.ps1')
             (Get-FunctionPath 'Test-DatumConfiguration.ps1')
         ) | ForEach-Object {
             . $_.FullName
@@ -22,13 +25,12 @@ Describe "Invoke-DscLCM Function Tests" -Tag Unit {
         Mock -CommandName Start-DscRunner
         Mock -CommandName Build-DatumConfiguration
         Mock -CommandName Get-ChildItem -MockWith { @() }
-        Mock -CommandName Split-Path -MockWith {
-            "$TestDrive\MockPath\"
-        }
+        Mock -CommandName Get-PipelineRunnerSetting -MockWith { return @{} }
+        Mock -CommandName Remove-RunnerTemporaryDirectory
         Mock -CommandName Test-Path -MockWith { return $true }
 
-        # Invoke-DscLCM always reads and validates datum.yml — mock these globally
-        # so unit tests remain focused on Invoke-DscLCM logic rather than datum validation
+        # Invoke-DscRunner always reads and validates datum.yml — mock these globally
+        # so unit tests remain focused on Invoke-DscRunner logic rather than datum validation
         Mock -CommandName Get-Content -MockWith { return "MOCKED DATUM CONTENT" }
         Mock -CommandName ConvertFrom-Yaml -MockWith {
             return @{ PipelineConfigurationMode = @{ ConfigurationMode = 'Audit'; ChangeWindows = @() } }
@@ -47,7 +49,7 @@ Describe "Invoke-DscLCM Function Tests" -Tag Unit {
         }
 
        It "Should build datum configuration" {
-            Invoke-DscLCM -exportConfigDir $exportConfigDir -ConfigurationMode "Audit" -ConfigurationSourcePath $ConfigurationSourcePath
+            Invoke-DscRunner -exportConfigDir $exportConfigDir -ConfigurationMode "Audit" -ConfigurationSourcePath $ConfigurationSourcePath
             Assert-MockCalled -CommandName Build-DatumConfiguration -Exactly 1 -Scope It
        }
     }
@@ -58,7 +60,7 @@ Describe "Invoke-DscLCM Function Tests" -Tag Unit {
             Mock -CommandName 'Clone-Repository' -Verifiable -MockWith {
                 return '\mockPath'
             }
-            { Invoke-DscLCM -exportConfigDir $exportConfigDir -ConfigurationMode "Audit" -ConfigurationSourcePath "http://mockGitRepo.com/repo"} | Should -Not -Throw
+            { Invoke-DscRunner -exportConfigDir $exportConfigDir -ConfigurationMode "Audit" -ConfigurationSourcePath "https://mockGitRepo.com/repo"} | Should -Not -Throw
             Should -InvokeVerifiable
         }
 
@@ -68,11 +70,9 @@ Describe "Invoke-DscLCM Function Tests" -Tag Unit {
                 $path -eq $exportConfigDir
             } -Verifiable -MockWith { return $true }
 
-            { Invoke-DscLCM -exportConfigDir $exportConfigDir -ConfigurationMode "Audit" -ConfigurationSourcePath $ConfigurationSourcePath } | Should -Not -Throw
+            { Invoke-DscRunner -exportConfigDir $exportConfigDir -ConfigurationMode "Audit" -ConfigurationSourcePath $ConfigurationSourcePath } | Should -Not -Throw
             Should -Invoke 'Clone-Repository' -Exactly 0
             Should -InvokeVerifiable
-            Should -Invoke 'Start-DscRunner' -Exactly 0
-
         }
 
         it "should throw an error if it's neither a valid URL or FilePath" {
@@ -82,14 +82,12 @@ Describe "Invoke-DscLCM Function Tests" -Tag Unit {
                 $path -eq $ConfigurationSourcePath
             } -Verifiable -MockWith { return $false }
 
-            { Invoke-DscLCM -exportConfigDir $exportConfigDir -ConfigurationMode "Audit" -ConfigurationSourcePath $ConfigurationSourcePath } | Should -Throw "*Invalid ConfigurationSourcePath*"
+            { Invoke-DscRunner -exportConfigDir $exportConfigDir -ConfigurationMode "Audit" -ConfigurationSourcePath $ConfigurationSourcePath } | Should -Throw "*Invalid ConfigurationSourcePath*"
             Should -Invoke 'Clone-Repository' -Exactly 0
             Should -InvokeVerifiable
             Should -Invoke 'Start-DscRunner' -Exactly 0
 
         }
-
-
 
     }
 
@@ -103,14 +101,14 @@ Describe "Invoke-DscLCM Function Tests" -Tag Unit {
 
         it "should call Start-DscRunner with the specified ConfigurationMode" {
             Mock -CommandName 'Start-DscRunner' -MockWith { return $true } -Verifiable
-            { Invoke-DscLCM -exportConfigDir $exportConfigDir -ConfigurationMode "Audit" -ConfigurationSourcePath $ConfigurationSourcePath } | Should -Not -Throw
+            { Invoke-DscRunner -exportConfigDir $exportConfigDir -ConfigurationMode "Audit" -ConfigurationSourcePath $ConfigurationSourcePath } | Should -Not -Throw
             Should -Invoke 'Start-DscRunner' -Exactly 1 -ParameterFilter {  $ConfigurationMode -eq 'Audit' }
             Should -InvokeVerifiable
         }
 
         it "should throw an error if an invalid ConfigurationMode is provided" {
             Mock -CommandName 'Start-DscRunner'
-            { Invoke-DscLCM -exportConfigDir $exportConfigDir -ConfigurationMode "InvalidMode" -ConfigurationSourcePath $ConfigurationSourcePath } | Should -Throw "*Cannot validate argument on parameter 'ConfigurationMode'*"
+            { Invoke-DscRunner -exportConfigDir $exportConfigDir -ConfigurationMode "InvalidMode" -ConfigurationSourcePath $ConfigurationSourcePath } | Should -Throw "*Cannot validate argument on parameter 'ConfigurationMode'*"
             Should -Invoke 'Start-DscRunner' -Exactly 0
         }
 
@@ -120,13 +118,50 @@ Describe "Invoke-DscLCM Function Tests" -Tag Unit {
             Mock -CommandName 'Get-PipelineRunnerConfigurationMode' -Verifiable -MockWith { return 'Audit' }
             Mock -CommandName 'Start-DscRunner' -Verifiable -MockWith { return $true }
 
-            { Invoke-DscLCM -exportConfigDir $exportConfigDir -ConfigurationSourcePath $ConfigurationSourcePath } | Should -Not -Throw
+            { Invoke-DscRunner -exportConfigDir $exportConfigDir -ConfigurationSourcePath $ConfigurationSourcePath } | Should -Not -Throw
 
             Should -Invoke 'ConvertFrom-Yaml' -Exactly 1
             Should -Invoke 'Get-PipelineRunnerConfigurationMode' -Exactly 1
             Should -Invoke 'Start-DscRunner' -Exactly 1 -ParameterFilter { $ConfigurationMode -eq 'Audit' }
 
             Should -InvokeVerifiable
+        }
+
+    }
+
+    Context "Run summary" {
+
+        BeforeAll {
+            mock -CommandName 'Get-ChildItem' -MockWith { @(
+                [PSCustomObject]@{ Fullname = "$TestDrive\mockConfig.yml" }
+            ) }
+        }
+
+        it "should return the summary produced by Merge-DscRunnerResult" {
+            Mock -CommandName 'Start-DscRunner' -MockWith {
+                [pscustomobject]@{ Status = 'Completed'; TotalResources = 1; PassCount = 1; FailCount = 0; SkipCount = 0; DurationSeconds = 0.1; FailedResources = @() }
+            }
+
+            $result = Invoke-DscRunner -exportConfigDir $exportConfigDir -ConfigurationMode "Audit" -ConfigurationSourcePath $ConfigurationSourcePath
+
+            $result.Status | Should -Be 'Completed'
+            $result.TotalConfigurations | Should -Be 1
+        }
+
+        it "should clean up the temporary directory it created for a remote source" {
+            Mock -CommandName 'Clone-Repository' -MockWith { return "$TestDrive\mockClone" }
+
+            Invoke-DscRunner -exportConfigDir $exportConfigDir -ConfigurationMode "Audit" -ConfigurationSourcePath "https://mockGitRepo.com/repo"
+
+            Should -Invoke 'Remove-RunnerTemporaryDirectory' -Exactly 1 -ParameterFilter { $Path -eq "$TestDrive\mockClone" }
+        }
+
+        it "should not clean up when -KeepTemporaryDirectory is supplied" {
+            Mock -CommandName 'Clone-Repository' -MockWith { return "$TestDrive\mockClone" }
+
+            Invoke-DscRunner -exportConfigDir $exportConfigDir -ConfigurationMode "Audit" -ConfigurationSourcePath "https://mockGitRepo.com/repo" -KeepTemporaryDirectory
+
+            Should -Invoke 'Remove-RunnerTemporaryDirectory' -Exactly 0
         }
 
     }

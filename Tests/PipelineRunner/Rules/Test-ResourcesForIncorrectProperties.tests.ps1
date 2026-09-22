@@ -6,6 +6,11 @@ Describe "Test-ResourcesForIncorrectProperties" -Tag Unit, PipelineRunner, Rules
         $preParseFilePath = (Get-FunctionPath 'Test-ResourcesForIncorrectProperties.ps1').FullName
         . $preParseFilePath
 
+        # Protect-SensitiveValue is a module Private function (redacts the offending value on
+        # the verbose stream); the rule script normally runs inside the imported module where
+        # it is already in scope, so it must be dot-sourced here too.
+        . (Get-FunctionPath 'Protect-SensitiveValue.ps1').FullName
+
         # Mock Get-DscResource for testing purposes
         Mock -CommandName Get-DscResource -MockWith {
             @{

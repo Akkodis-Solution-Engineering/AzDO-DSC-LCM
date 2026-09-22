@@ -1,133 +1,102 @@
 
-Describe "Invoke-AZDoLCM Function Tests" -Tag Unit {
+Describe "Invoke-DscPipelineRunner Function Tests" -Tag Unit {
 
     BeforeAll {
 
-        # Load the function to test, and Invoke-DscLCM so its real signature is known before mocking it
-        $preParseFilePath = (Get-FunctionPath 'Invoke-AZDoLCM.ps1').FullName
-        . (Get-FunctionPath 'Invoke-DscLCM.ps1').FullName
+        # Load the function to test
+        $preParseFilePath = (Get-FunctionPath 'Invoke-DscPipelineRunner.ps1').FullName
         . $preParseFilePath
 
-        # Mock Authentication Provider Function
-        Function New-AzDoAuthenticationProvider {
-            param($OrganizationName, $PersonalAccessToken, [switch]$useManagedIdentity)
-        }
+        # Invoke-DscPipelineRunner is a thin wrapper: it authenticates to Azure DevOps then
+        # delegates everything else to Invoke-DscRunner, so that's the only downstream call
+        # that needs to be mocked/asserted here. Neither AzureDevOpsDsc.Common (mocked out via
+        # Import-Module below) nor Invoke-DscRunner's own heavy dependency chain are loaded in
+        # this test, so both commands are declared as stubs here purely so Pester's Mock has
+        # something to intercept.
+        function New-AzDoAuthenticationProvider { param($OrganizationName, $PersonalAccessToken, [switch]$useManagedIdentity) }
+        function Invoke-DscRunner { param($exportConfigDir, $ConfigurationSourcePath, $ConfigurationRevision, $ConfigurationMode, $ReportPath, [switch]$ContinueOnError, $Engine, $EngineVersion, [switch]$FailOnError, [switch]$KeepTemporaryDirectory) }
 
         Mock -CommandName Import-Module
         Mock -CommandName New-AzDoAuthenticationProvider
-        Mock -CommandName Invoke-DscLCM
-        # exportConfigDir's ValidateScript calls the real Test-Path at parameter-binding time.
+        Mock -CommandName Invoke-DscRunner -MockWith { return [pscustomobject]@{ Status = 'Completed' } }
         Mock -CommandName Test-Path -MockWith { return $true }
 
         $exportConfigDir = New-MockDirectoryPath
         $ConfigurationSourcePath = New-MockDirectoryPath
-
-        # Most contexts assume this is set; "Environment Variable Check" below covers the unset case.
-        $Env:AZDODSC_CACHE_DIRECTORY = "mocked"
-
-    }
-
-    AfterAll {
-        $Env:AZDODSC_CACHE_DIRECTORY = $null
-    }
-
-    Context "Environment Variable Check" {
-
-        AfterEach {
-            $Env:AZDODSC_CACHE_DIRECTORY = "mocked"
-        }
-
-        It "Should throw an error if AZDODSC_CACHE_DIRECTORY environment variable is not set" {
-            Remove-Item Env:AZDODSC_CACHE_DIRECTORY -ErrorAction SilentlyContinue
-            { Invoke-AZDoLCM -AzureDevopsOrganizationName "MyOrg" -exportConfigDir $exportConfigDir -JITToken "abc123" -ConfigurationMode "Audit" -ConfigurationSourcePath $ConfigurationSourcePath } | Should -Throw "*The Environment Variable AZDODSC_CACHE_DIRECTORY is not set. Please set the environment variable before running this script*"
-            Should -Invoke -CommandName Invoke-DscLCM -Exactly 0
-        }
-
-        It "Should not throw an error if AZDODSC_CACHE_DIRECTORY environment variable is set" {
-            $env:AZDODSC_CACHE_DIRECTORY = "SomePath"
-            { Invoke-AZDoLCM -AzureDevopsOrganizationName "MyOrg" -exportConfigDir $exportConfigDir -JITToken "abc123" -ConfigurationMode "Audit" -ConfigurationSourcePath $ConfigurationSourcePath } | Should -Not -Throw
-        }
+        $validPat = 'a' * 52
     }
 
     Context "AzureDevOpsDsc.Common Dependency Check" {
 
-        It "Should throw a clear error if AzureDevOpsDsc.Common cannot be imported" {
+        It "should throw a clear error when AzureDevOpsDsc.Common is not available" {
             Mock -CommandName Import-Module -MockWith { throw "module not found" }
-            { Invoke-AZDoLCM -AzureDevopsOrganizationName "MyOrg" -exportConfigDir $exportConfigDir -JITToken "abc123" -ConfigurationMode "Audit" -ConfigurationSourcePath $ConfigurationSourcePath } | Should -Throw "*AzureDevOpsDsc.Common*"
-            Should -Invoke -CommandName New-AzDoAuthenticationProvider -Exactly 0
-            Should -Invoke -CommandName Invoke-DscLCM -Exactly 0
-        }
 
+            { Invoke-DscPipelineRunner -AzureDevopsOrganizationName "MyOrg" -exportConfigDir $exportConfigDir -ConfigurationSourcePath $ConfigurationSourcePath -JITToken "mockToken" } |
+                Should -Throw "*Required module 'AzureDevOpsDsc.Common' is not available*"
+
+            Should -Invoke Invoke-DscRunner -Exactly 0
+        }
     }
 
     Context "Execution Logic" {
 
-        BeforeAll {
-            function Get-MockPATToken {
-                param(
-                    [int]$Length = 52
-                )
+        It "should create a ManagedIdentity authentication provider by default" {
+            Invoke-DscPipelineRunner -AzureDevopsOrganizationName "MyOrg" -exportConfigDir $exportConfigDir -ConfigurationSourcePath $ConfigurationSourcePath -JITToken "mockToken"
 
-                # Define characters allowed in a PAT token
-                $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-
-                # Generate a random token of specified length
-                -join ((1..$Length) | ForEach-Object { $chars[(Get-Random -Maximum $chars.Length)] })
+            Should -Invoke New-AzDoAuthenticationProvider -Exactly 1 -ParameterFilter {
+                $OrganizationName -eq "MyOrg" -and $useManagedIdentity
             }
         }
 
-       It "Should create authentication provider with ManagedIdentity" {
-            Invoke-AZDoLCM -AzureDevopsOrganizationName "MyOrg" -exportConfigDir $exportConfigDir -JITToken "abc123" -ConfigurationMode "Audit" -ConfigurationSourcePath $ConfigurationSourcePath
-            Assert-MockCalled -CommandName New-AzDoAuthenticationProvider -Exactly 1 -Scope It -ParameterFilter { $useManagedIdentity }
-       }
+        It "should create a PAT authentication provider when -AuthenticationType 'PAT' is supplied" {
+            Invoke-DscPipelineRunner -AzureDevopsOrganizationName "MyOrg" -exportConfigDir $exportConfigDir -ConfigurationSourcePath $ConfigurationSourcePath -JITToken "mockToken" -AuthenticationType "PAT" -PATToken $validPat
 
-       It "Should create authentication provider with PAT" {
-            $PAT = Get-MockPATToken
-            Invoke-AZDoLCM -AzureDevopsOrganizationName "MyOrg" -exportConfigDir $exportConfigDir -JITToken $PAT -AuthenticationType "PAT" -PATToken $PAT -ConfigurationMode "Audit" -ConfigurationSourcePath $ConfigurationSourcePath
-            Assert-MockCalled -CommandName New-AzDoAuthenticationProvider -Exactly 1 -Scope It -ParameterFilter { $PersonalAccessToken -eq $PAT }
-       }
-
+            Should -Invoke New-AzDoAuthenticationProvider -Exactly 1 -ParameterFilter {
+                $OrganizationName -eq "MyOrg" -and $PersonalAccessToken -eq $validPat
+            }
+        }
     }
 
-    Context "Delegation to Invoke-DscLCM" {
+    Context "Delegation to Invoke-DscRunner" {
 
-        It "Should delegate to Invoke-DscLCM with the correct parameters" {
-            # ParameterFilter binds Invoke-DscLCM's own bound parameters as local variables,
-            # which would shadow same-named outer variables — capture expected values under
-            # different names first so the comparison isn't a tautology.
-            $expectedExportDir = $exportConfigDir
-            $expectedSourcePath = $ConfigurationSourcePath
+        It "should delegate to Invoke-DscRunner with the mandatory parameters" {
+            Invoke-DscPipelineRunner -AzureDevopsOrganizationName "MyOrg" -exportConfigDir $exportConfigDir -ConfigurationSourcePath $ConfigurationSourcePath -JITToken "mockToken"
 
-            Invoke-AZDoLCM -AzureDevopsOrganizationName "MyOrg" -exportConfigDir $exportConfigDir -JITToken "abc123" -ConfigurationMode "Audit" -ConfigurationSourcePath $ConfigurationSourcePath
-            Should -Invoke -CommandName Invoke-DscLCM -Exactly 1 -ParameterFilter {
-                $exportConfigDir -eq $expectedExportDir -and
-                $ConfigurationSourcePath -eq $expectedSourcePath -and
-                $ConfigurationMode -eq 'Audit'
+            Should -Invoke Invoke-DscRunner -Exactly 1 -ParameterFilter {
+                $exportConfigDir -eq $exportConfigDir -and $ConfigurationSourcePath -eq $ConfigurationSourcePath
             }
         }
 
-        It "Should omit ConfigurationMode from the delegated call when not supplied" {
-            Invoke-AZDoLCM -AzureDevopsOrganizationName "MyOrg" -exportConfigDir $exportConfigDir -JITToken "abc123" -ConfigurationSourcePath $ConfigurationSourcePath
-            Should -Invoke -CommandName Invoke-DscLCM -Exactly 1 -ParameterFilter {
-                [string]::IsNullOrEmpty($ConfigurationMode)
+        It "should return whatever Invoke-DscRunner returns" {
+            $result = Invoke-DscPipelineRunner -AzureDevopsOrganizationName "MyOrg" -exportConfigDir $exportConfigDir -ConfigurationSourcePath $ConfigurationSourcePath -JITToken "mockToken"
+
+            $result.Status | Should -Be 'Completed'
+        }
+
+        It "should forward -ConfigurationRevision, -ConfigurationMode, and -ReportPath when supplied" {
+            Invoke-DscPipelineRunner -AzureDevopsOrganizationName "MyOrg" -exportConfigDir $exportConfigDir -ConfigurationSourcePath $ConfigurationSourcePath -JITToken "mockToken" `
+                -ConfigurationRevision "main" -ConfigurationMode "Enforce" -ReportPath $exportConfigDir
+
+            Should -Invoke Invoke-DscRunner -Exactly 1 -ParameterFilter {
+                $ConfigurationRevision -eq "main" -and $ConfigurationMode -eq "Enforce" -and $ReportPath -eq $exportConfigDir
             }
         }
 
-        It "Should pass through ContinueOnError and ReportPath when supplied" {
-            $expectedReportPath = $exportConfigDir
-            Invoke-AZDoLCM -AzureDevopsOrganizationName "MyOrg" -exportConfigDir $exportConfigDir -JITToken "abc123" -ConfigurationMode "Audit" -ConfigurationSourcePath $ConfigurationSourcePath -ReportPath $exportConfigDir -ContinueOnError
-            Should -Invoke -CommandName Invoke-DscLCM -Exactly 1 -ParameterFilter {
-                $ReportPath -eq $expectedReportPath -and $ContinueOnError -eq $true
+        It "should forward -ContinueOnError, -EngineVersion, -FailOnError, and -KeepTemporaryDirectory when supplied" {
+            Invoke-DscPipelineRunner -AzureDevopsOrganizationName "MyOrg" -exportConfigDir $exportConfigDir -ConfigurationSourcePath $ConfigurationSourcePath -JITToken "mockToken" `
+                -ContinueOnError -EngineVersion "3" -FailOnError -KeepTemporaryDirectory
+
+            Should -Invoke Invoke-DscRunner -Exactly 1 -ParameterFilter {
+                $ContinueOnError -eq $true -and $EngineVersion -eq "3" -and $FailOnError -eq $true -and $KeepTemporaryDirectory -eq $true
             }
         }
 
-        It "Should not pass ReportPath or ContinueOnError when not supplied" {
-            Invoke-AZDoLCM -AzureDevopsOrganizationName "MyOrg" -exportConfigDir $exportConfigDir -JITToken "abc123" -ConfigurationMode "Audit" -ConfigurationSourcePath $ConfigurationSourcePath
-            Should -Invoke -CommandName Invoke-DscLCM -Exactly 1 -ParameterFilter {
-                [string]::IsNullOrEmpty($ReportPath) -and $ContinueOnError -ne $true
+        It "should forward the resolved -Engine" {
+            Invoke-DscPipelineRunner -AzureDevopsOrganizationName "MyOrg" -exportConfigDir $exportConfigDir -ConfigurationSourcePath $ConfigurationSourcePath -JITToken "mockToken" -Engine "DscV3"
+
+            Should -Invoke Invoke-DscRunner -Exactly 1 -ParameterFilter {
+                $Engine -eq "DscV3"
             }
         }
-
     }
-
 }

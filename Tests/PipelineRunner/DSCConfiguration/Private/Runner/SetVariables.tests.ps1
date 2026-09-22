@@ -18,8 +18,8 @@ Describe "SetVariables Function Tests" -Tag Unit, PipelineRunner, Configuration 
             "Key.With.Dot" = "DotValue"
         }
         
-        SetVariables -Source $source
-        
+        SetVariables -Source $source -Target $global:target
+
         $script:Key_With_Dot | Should -Be "DotValue"
     }
 

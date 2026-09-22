@@ -31,8 +31,9 @@ Describe "parameters Function Tests" -Tag Unit, PipelineRunner, Configuration {
         $result | Should -Be "Value3"
     }
 
-    It "should return $null for a non-existent key" {
-        $result = parameters -Name "NonExistentKey"
-        $result | Should -Be $null
+    It "should throw for a non-existent key" {
+        # An undefined parameter is a terminating error (see parameters.ps1): silently
+        # returning $null let the wrong value land in a resource property unnoticed.
+        { parameters -Name "NonExistentKey" } | Should -Throw
     }
 }

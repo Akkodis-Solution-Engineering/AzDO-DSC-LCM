@@ -8,7 +8,13 @@ Describe "Start-DscRunner Function Tests" -Tag Unit {
         . $preParseFilePath
 
         # Mock the DatumConfigurationScriptBlock function. This function is not available in the test environment.
-        function DatumConfigurationScriptBlock { param($outputPath, $configurationPath) }
+        # Build-DatumConfiguration now requires the compile step to have produced at least one
+        # output file (an empty OutputPath after a run means the compile silently failed), so
+        # the stub must write one, same as the real Datum compile step would.
+        function DatumConfigurationScriptBlock {
+            param($outputPath, $configurationPath)
+            Set-Content -Path (Join-Path $outputPath "Compiled.mof") -Value "mock"
+        }
 
     }
 
@@ -40,8 +46,9 @@ Describe "Start-DscRunner Function Tests" -Tag Unit {
             Build-DatumConfiguration -OutputPath $outputPath -ConfigurationPath $configurationPath
 
 
-            # Assert: Check that the output directory is cleared
-            (Get-ChildItem -Path $outputPath).Count | Should -Be 0
+            # Assert: the pre-existing file was cleared before the compile step ran, so the
+            # only file left is the one the (stubbed) compile step produced.
+            (Get-ChildItem -Path $outputPath).Name | Should -Be "Compiled.mof"
             $fileCountBefore | Should -BeGreaterThan 0
 
         }
@@ -49,11 +56,13 @@ Describe "Start-DscRunner Function Tests" -Tag Unit {
         It "Should invoke the script block asynchronously" {
 
             # Mock the Get-Command function
-            Mock -CommandName Get-Command -MockWith { 
-                return [PSCustomObject]@{ 
-                    ScriptBlock = { 
+            Mock -CommandName Get-Command -MockWith {
+                return [PSCustomObject]@{
+                    ScriptBlock = {
                         param($outputPath, $configurationPath)
-    
+
+                            Set-Content -Path (Join-Path $outputPath "Compiled.mof") -Value "mock"
+
                             @{
                                 OutputPath = $outputPath
                                 ConfigurationPath = $configurationPath

@@ -7,6 +7,13 @@ Describe 'New-TemporaryDirectory Function Tests' -Tag Unit {
         $preParseFilePath = (Get-FunctionPath 'New-TemporaryDirectory.ps1').FullName
         . $preParseFilePath
 
+        # New-TemporaryDirectory now resolves a cache root, locks down the new directory's
+        # permissions, and registers it for later cleanup - all module Private functions
+        # normally already in scope when this file runs inside the imported module.
+        . (Get-FunctionPath 'Resolve-CacheDirectory.ps1').FullName
+        . (Get-FunctionPath 'Set-PrivateDirectoryPermission.ps1').FullName
+        . (Get-FunctionPath 'Register-RunnerTemporaryDirectory.ps1').FullName
+
         Mock -CommandName New-Item -MockWith {
             param($ItemType, $Path)
             $path = New-MockDirectoryPath

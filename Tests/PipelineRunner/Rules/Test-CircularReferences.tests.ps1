@@ -209,7 +209,7 @@ Describe "Test-CircularReferences" -Tag Unit, PipelineRunner, Rules, PreParse {
 
     }
 
-    It "Should detect complex circular dependencies" {
+    It "Should not flag a diamond-shaped dependency graph as circular" {
         $PipelineResources = @(
             [PSCustomObject]@{
                 Type = "ResourceType1"
@@ -252,7 +252,9 @@ Describe "Test-CircularReferences" -Tag Unit, PipelineRunner, Rules, PreParse {
             Stack = @()
         }
 
-        { . $preParseFilePath -PipelineResources $PipelineResources } | Should -Throw "*Circular dependency detected with Resource*"
+        # Resources 3, 4 and 5 are each reachable by more than one branch (a diamond), which is
+        # a valid, acyclic graph - not a circular dependency.
+        { . $preParseFilePath -PipelineResources $PipelineResources } | Should -Not -Throw
 
     }
 

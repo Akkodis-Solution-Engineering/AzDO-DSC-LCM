@@ -422,6 +422,7 @@ function Start-DscRunner {
             $forcedByNotify = ($ExecutionMode -eq "Set") -and $script:pendingNotifyRefresh.Contains($resourceKey)
 
             $CurrentTaskState = 'Continue'
+            $didSet = $false
 
             if ($result.InDesiredState -and -not $forcedByNotify) {
                 $resourceStatus = 'OK'
@@ -432,6 +433,7 @@ function Start-DscRunner {
                 $resourceError = $result.Message
             }
             elseif ($ExecutionMode -eq "Set") {
+                $didSet = $true
                 try {
                     $result = Invoke-EngineAction -Method 'Set' -ModuleName $module -Name $resourceType -Property $Property @engineArgs
                     $resourceStatus = 'OK'
@@ -468,8 +470,11 @@ function Start-DscRunner {
             }
 
             # ApplyOnly vs Enforce re-test/verify branching (this repo's original behavior;
-            # Dsc.PipelineRunner has no equivalent since it never had these modes).
-            if (($CurrentTaskState -eq 'Continue') -and ($ConfigurationMode -eq 'Enforce') -and ($ExecutionMode -eq 'Set') -and ($resourceStatus -eq 'OK')) {
+            # Dsc.PipelineRunner has no equivalent since it never had these modes). Gated on
+            # $didSet, not just $ExecutionMode -eq 'Set', so a resource already in the desired
+            # state on its first Test (no Set attempted) isn't re-tested a second time for
+            # nothing.
+            if (($CurrentTaskState -eq 'Continue') -and ($ConfigurationMode -eq 'Enforce') -and $didSet -and ($resourceStatus -eq 'OK')) {
                 try {
                     $verifyResult = Invoke-EngineAction -Method 'Test' -ModuleName $module -Name $resourceType -Property $Property @engineArgs
                     if ($verifyResult.InDesiredState) {

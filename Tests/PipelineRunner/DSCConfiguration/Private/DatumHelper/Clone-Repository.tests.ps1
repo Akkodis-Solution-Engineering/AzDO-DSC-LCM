@@ -6,14 +6,20 @@ Describe 'Clone-Repository Function Tests' -Tag Unit {
         # Load the functions to test
         $preParseFilePath = (Get-FunctionPath 'Clone-Repository.ps1').FullName
         $newTempDir = (Get-FunctionPath 'New-TemporaryDirectory.ps1').FullName
+        $assertSecureGitUrlPath = (Get-FunctionPath 'Assert-SecureGitUrl.ps1').FullName
 
         . $preParseFilePath
         . $newTempDir
+        . $assertSecureGitUrlPath
 
    
 
         Mock New-TemporaryDirectory { return (New-MockDirectoryPath) }
-        Mock git
+        # Clone-Repository checks $LASTEXITCODE after each git call; the mock must set it to 0
+        # itself since a mocked call doesn't touch it, and a leftover nonzero value from an
+        # earlier real git invocation elsewhere in the process would otherwise make this look
+        # like a failed clone.
+        Mock git { $global:LASTEXITCODE = 0 }
 
     }
 
@@ -25,8 +31,8 @@ Describe 'Clone-Repository Function Tests' -Tag Unit {
             # Act
             Clone-Repository -DatumURLConfig $DatumURLConfig
 
-            # Assert
-            Assert-MockCalled git -Exactly 1 -Scope It
+            # Assert: one call to clone, one to resolve HEAD's commit SHA for the audit log.
+            Assert-MockCalled git -Exactly 2 -Scope It
         }
     }
 

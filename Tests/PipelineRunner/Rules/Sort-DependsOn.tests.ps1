@@ -201,19 +201,13 @@ Describe "Sort-DependsOn" -Tag Unit, PipelineRunner, Rules, Sort {
         $sortedResources[0].Name | Should -Be 'Task1'
     }
 
-    It "should add a resource to the end of the list if it has no dependencies" {
-
-        Mock -CommandName Write-Verbose
+    It "should throw if a resource depends on one that is not present in the configuration" {
 
         $resources = @(
             [PSCustomObject]@{ Type = 'Module/Resource'; Name = 'Task2'; DependsOn = @('Module/Resource/Task3') }
         )
-        
-        $sortedResources = . $preParseFilePath -PipelineResources $resources -Verbose
-        
-        # Assert that Task2 and Task3 are at the bottom because they have dependencies
-        $sortedResources.Name | Should -Be 'Task2'
-        Assert-MockCalled -CommandName Write-Verbose -ParameterFilter { $Message -like '*Adding resource to the end of the list*' }
+
+        { . $preParseFilePath -PipelineResources $resources } | Should -Throw
     }
 
 }

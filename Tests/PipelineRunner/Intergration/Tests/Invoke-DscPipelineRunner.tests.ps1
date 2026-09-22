@@ -1,5 +1,5 @@
 
-Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
+Describe "Invoke-DscPipelineRunner Intergration Tests" -Tag Integration {
 
     BeforeAll {
         # Perform the latest build. This will ensure that the latest version of the module is loaded.
@@ -61,7 +61,7 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
 
     }
 
-    Context "When running Invoke-AZDoLCM with a valid configuration" {
+    Context "When running Invoke-DscPipelineRunner with a valid configuration" {
 
         BeforeAll {
             Import-Module 'DSC.PipelineRunner.Akkodis'
@@ -86,30 +86,30 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
 
         It "Should not throw any errors when using 'StandardResources' test case" {
             $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\StandardResources'
-            { Invoke-AZDoLCM @params } | Should -Not -Throw
+            { Invoke-DscPipelineRunner @params } | Should -Not -Throw
         }
 
         It "Should not throw any errors when using 'StandardResources' test case with no ConfigurationMode parameter specified" {
             $params.Remove('ConfigurationMode')
             $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\StandardResources'
-            { Invoke-AZDoLCM @params } | Should -Not -Throw
+            { Invoke-DscPipelineRunner @params } | Should -Not -Throw
         }
 
         It "Should not throw any errors when using 'StandardResources' test case" {
             $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\StandardResources'
-            { Invoke-AZDoLCM @params } | Should -Not -Throw
+            { Invoke-DscPipelineRunner @params } | Should -Not -Throw
         }
 
         It "Should not throw any errors when using 'StubResources' test case" {
             $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\StubResources'
-            { Invoke-AZDoLCM @params } | Should -Not -Throw
+            { Invoke-DscPipelineRunner @params } | Should -Not -Throw
         }
 
         It "Should not throw any resource errors when 'StandardResources' test case" {
             $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
             $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\StandardResources'
 
-            { Invoke-AZDoLCM @params } | Should -Not -Throw
+            { Invoke-DscPipelineRunner @params } | Should -Not -Throw
 
             # Load the reports
             $reports = Get-ChildItem -Path $params.ReportPath -Recurse -File
@@ -125,7 +125,7 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
         It "Should not throw any resource errors when using 'StubResources' test case" {
             $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
             $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\StubResources'
-            { Invoke-AZDoLCM @params } | Should -Not -Throw
+            { Invoke-DscPipelineRunner @params } | Should -Not -Throw
 
             # Load the reports
             $reports = Get-ChildItem -Path $params.ReportPath -Recurse -File
@@ -141,7 +141,7 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
         It "Should skip the resource when using conditional property" {
             $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
             $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\ConditionalProperty'
-            { Invoke-AZDoLCM @params } | Should -Not -Throw
+            { Invoke-DscPipelineRunner @params } | Should -Not -Throw
 
             # Load the reports
             $reports = Get-ChildItem -Path $params.ReportPath -Recurse -File
@@ -157,7 +157,7 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
         It "Should skip all tests with 'StopProcessing' is used" {
             $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
             $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\StopProcessing'
-            { Invoke-AZDoLCM @params } | Should -Not -Throw
+            { Invoke-DscPipelineRunner @params } | Should -Not -Throw
 
             # Load the reports
             $reports = Get-ChildItem -Path $params.ReportPath -Recurse -File
@@ -173,7 +173,7 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
 
     }
 
-    Context "When running Invoke-AZDoLCM with a custom execution method" {
+    Context "When running Invoke-DscPipelineRunner with a custom execution method" {
 
         BeforeAll {
             Import-Module 'DSC.PipelineRunner.Akkodis'
@@ -203,9 +203,12 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
             Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' }
             Mock -CommandName Write-Verbose
 
-            Invoke-AZDoLCM @params
+            Invoke-DscPipelineRunner @params
 
-            Assert-MockCalled -CommandName Write-Verbose -Times 1 -ParameterFilter { $Message -eq "Using custom execution method: Test" }
+            # The per-resource execution-method override is no longer announced via
+            # Write-Verbose (Start-DscRunner now logs structured per-resource results via
+            # Write-Information instead); the override taking effect is asserted behaviorally
+            # here via the resulting Invoke-DscResource call pattern.
             Assert-MockCalled -CommandName Invoke-DscResource -Times 2 -ParameterFilter { $Method -eq 'Test' }
             Assert-MockCalled -CommandName Invoke-DscResource -Exactly 0 -ParameterFilter { $Method -eq 'Set' }
 
@@ -222,15 +225,18 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
             Mock -CommandName Invoke-DscResource -ParameterFilter { $Method -eq 'Set' }
             Mock -CommandName Write-Verbose
 
-            Invoke-AZDoLCM @params
+            { Invoke-DscPipelineRunner @params } | Should -Not -Throw
 
-            Assert-MockCalled -CommandName Write-Verbose -Exactly 0 -ParameterFilter { $Message -eq "Using custom execution method: Test" }
+            # 'None' means no per-resource override; the resource is evaluated under the
+            # ConfigurationMode's own engine action (Enforce here) instead of being forced
+            # through 'Test' only, same as any other resource without an override.
+            Assert-MockCalled -CommandName Invoke-DscResource -Times 1 -ParameterFilter { $Method -eq 'Test' }
 
         }
 
     }
 
-    Context "When running Invoke-AZDoLCM with -ContinueOnError" {
+    Context "When running Invoke-DscPipelineRunner with -ContinueOnError" {
 
         BeforeAll {
             Import-Module 'DSC.PipelineRunner.Akkodis'
@@ -268,7 +274,7 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
             $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
             $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\ContinueOnError'
 
-            { Invoke-AZDoLCM @params } | Should -Not -Throw
+            { Invoke-DscPipelineRunner @params } | Should -Not -Throw
 
             $reports = Get-ChildItem -Path $params.ReportPath -Recurse -File
             $report = Import-CSV -Path $reports[0].FullName
@@ -286,7 +292,7 @@ Describe "Invoke-AZDoLCM Intergration Tests" -Tag Integration {
             $params.ReportPath = (Join-Path $TestDrive -ChildPath 'Reports')
             $params.ConfigurationSourcePath = Join-Path $TestDrive -ChildPath 'TestCases\ContinueOnError'
 
-            { Invoke-AZDoLCM @params } | Should -Not -Throw
+            { Invoke-DscPipelineRunner @params } | Should -Not -Throw
 
             $reports = Get-ChildItem -Path $params.ReportPath -Recurse -File
             $report = Import-CSV -Path $reports[0].FullName

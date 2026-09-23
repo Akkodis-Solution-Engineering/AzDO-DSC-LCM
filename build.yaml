@@ -30,6 +30,7 @@ BuildWorkflow:
     - Copy_Pipeline_Rules
     - Copy_Actions
     - Copy_ChangeLog
+    - Build_Wiki_Content
 
   pack:
     - Package_Module

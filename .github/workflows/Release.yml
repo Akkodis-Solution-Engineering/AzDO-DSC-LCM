@@ -115,6 +115,11 @@ jobs:
         )
       }}
     runs-on: windows-latest
+    # The default workflow-level 'contents: read' (above) cannot push to the repository wiki -
+    # GitHub ties wiki write access to the token's 'contents' permission. Only this job pushes
+    # anywhere, so only this job is elevated.
+    permissions:
+      contents: write
     env:
       # $env:ModuleVersion has to be set before the *first* `build` task runs (not just before
       # pack), since Increment_Version reads it to bake the tag's version into the manifest
@@ -138,6 +143,25 @@ jobs:
       - name: Package module
         shell: pwsh
         run: .\Build.ps1 -Tasks pack
+
+      # Publishes output/WikiContent (built as part of the 'build' task above, via
+      # Build_Wiki_Content in build.yaml) to <owner>/<repo>.wiki.git. Full releases only - a
+      # preview tag ships to consumers without moving the wiki, so the published wiki always
+      # describes the latest full release rather than a preview most consumers never install.
+      #
+      # Publish_Wiki_Content (.build/tasks/5.Build-Wiki.ps1) never throws: every outcome -
+      # published, already up to date, no token, wiki not initialised, push rejected - is
+      # written to $GITHUB_STEP_SUMMARY and the task exits clean, by design (see the "wiki is
+      # generated" page in WikiSource/Contributing.md). continue-on-error is added on top as a
+      # second line of defence, so a change to that self-guard cannot turn a wiki hiccup into a
+      # failed release whose Gallery package has already been packaged.
+      - name: Publish wiki content
+        if: needs.validate.outputs.isPrerelease == 'false'
+        continue-on-error: true
+        shell: pwsh
+        env:
+          GitHubToken: ${{ secrets.GITHUB_TOKEN }}
+        run: .\Build.ps1 -Tasks Publish_Wiki_Content
 
       # No GitHub Release, no PowerShell Gallery publish - this is a local release only. The
       # packaged module stays within this Actions run as a downloadable artifact.

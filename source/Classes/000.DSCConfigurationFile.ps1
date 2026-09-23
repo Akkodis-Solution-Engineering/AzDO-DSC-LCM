@@ -96,13 +96,16 @@ class DSCConfigurationFile {
         
         # Parse the Parameters
         if ($null -ne $pipeline.parameters) {
-            # Load the parameters/ If the variables already exist in memory parse them in.
-            $this.parameters = GetParameterValues -Source $pipeline.parameters
+            # Raw assignment only - this used to call GetParameterValues/SetVariables (which
+            # resolved default values and populated the module's shared $parameters/$variables
+            # scope) here, at parse time. That processing now happens in Start-DscRunner
+            # (GetDefaultValues + SetVariables -Target), mirroring the engine's own file-level
+            # parameter/variable resolution and keeping this class limited to parsing.
+            $this.parameters = $pipeline.parameters
         }
 
         # Variables
         if ($null -ne $pipeline.variables) {
-            SetVariables -Source $pipeline.variables
             $this.variables = $pipeline.variables
         }
 

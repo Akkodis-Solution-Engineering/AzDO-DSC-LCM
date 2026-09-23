@@ -1,0 +1,255 @@
+# Runs the Integration suite against real infrastructure that no hosted GitHub runner can
+# provide on its own: a live WinRM listener, a real DSC v2 (Invoke-DscResource) engine, the DSC
+# v3 (dsc.exe) engine, and a real SSH remoting connection. Used as a release gate by Release.yml.
+#
+# Split into two jobs because the two halves need different self-hosted runners:
+#
+#   * winrm-dscv2-dscv3 (runs-on: [self-hosted]) - the Windows + PowerShell 7 self-hosted runner
+#     that has a WinRM listener and a real PSDesiredStateConfiguration install. Exercises
+#     Target/WinRM, the DscV2 engine, and the DscV3 (dsc.exe) engine, which all work fine on the
+#     same Windows host.
+#   * ssh (runs-on: [linux]) - the self-hosted Linux runner. Exercises Target/SSH (which this job
+#     points at itself over SSH - no second machine needed) plus the other suites that need a
+#     real dependency but not a real Windows host (notify/using(), preCondition/postCondition,
+#     the extended function language, and - opt-in only, see below - Credential/SecretManagement
+#     against a live SecretStore vault).
+#
+# scripts/Enable-SelfHostedWinRM.ps1, scripts/Install-DscV3.ps1, scripts/Test-DscV2Smoke.ps1,
+# scripts/Test-DscV3Smoke.ps1, scripts/Test-DscV3ConfigDocument.ps1,
+# scripts/Invoke-RemotingSelfHostedTests.ps1 and scripts/Invoke-DscV2SelfHostedTests.ps1 are the
+# same self-hosted bootstrap/runner scripts a maintainer would use by hand on the runner; this
+# workflow just sequences them in CI.
+name: Integration Tests (Self-Hosted)
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+# Serialize (don't cancel) superseded runs: both jobs drive real, stateful infrastructure on a
+# persistent self-hosted runner (a live WinRM listener / DSC engine, an sshd on the runner
+# itself), so killing an in-progress run risks leaving that runner's state half-applied for the
+# next job that lands on it. The group key names this workflow literally instead of using
+# ${{ github.workflow }}: inside a workflow_call invocation that expression resolves to the
+# CALLING workflow's name, so every gate Release.yml reuses would land in one shared group and
+# the gates that cancel in progress would cancel their siblings before a runner was assigned.
+concurrency:
+  group: integration-selfhosted-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  winrm-dscv2-dscv3:
+    name: WinRM / DSC v2 / DSC v3 on self-hosted
+    runs-on: [self-hosted]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Installed only when missing so a warm runner is not re-provisioned every run. Pester is
+      # pinned to the 5.x line (New-PesterConfiguration's schema differs across major versions);
+      # -SkipPublisherCheck is required because the runner may ship an older Pester (4.x) signed
+      # by a different Authenticode publisher, which otherwise blocks installing 5.x side-by-side.
+      - name: Ensure PowerShell dependencies
+        shell: pwsh
+        run: |
+          if (-not (Get-Module -ListAvailable -Name Pester | Where-Object { $_.Version.Major -eq 5 })) {
+            Write-Host "Installing Pester (5.x) ..."
+            Install-Module -Name Pester -MinimumVersion '5.0.0' -MaximumVersion '5.9999.9999' `
+              -Force -Scope CurrentUser -AllowClobber -SkipPublisherCheck
+          }
+          if (-not (Get-Module -ListAvailable -Name PSDesiredStateConfiguration)) {
+            Write-Host "Installing PSDesiredStateConfiguration ..."
+            Install-Module -Name PSDesiredStateConfiguration -Force -Scope CurrentUser -AllowClobber
+          }
+
+      # Configures a WinRM listener when the runner has none, so the suite below runs its live
+      # connection tests instead of skipping them with a warning. Probes first and makes no
+      # changes on a runner that is already reachable, and never fails the job: an environment
+      # problem on the runner must not turn an unrelated pull request red.
+      - name: Ensure WinRM is enabled
+        shell: pwsh
+        run: ./scripts/Enable-SelfHostedWinRM.ps1
+
+      # Bootstraps Microsoft's DSC v3 executable and adds it to PATH (the script appends to
+      # $GITHUB_PATH, so later steps see `dsc`). Skipped if a `dsc` is already on PATH (warm
+      # runner).
+      - name: Ensure DSC v3 executable
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if (Get-Command -Name dsc -CommandType Application -ErrorAction SilentlyContinue) {
+            Write-Host "dsc already present: $((Get-Command dsc).Source)"
+          }
+          else {
+            ./scripts/Install-DscV3.ps1 -Verbose
+          }
+
+      - name: Report environment
+        shell: pwsh
+        run: |
+          $PSVersionTable | Format-List
+          Get-Command Invoke-DscResource -ErrorAction SilentlyContinue | Format-List Name, Source, Version
+          $dsc = Get-Command -Name dsc -CommandType Application -ErrorAction SilentlyContinue
+          if ($dsc) { & $dsc.Source --version }
+
+      # Exercises the module's real DscV2 engine action against a live resource (no mocks).
+      - name: Run DSC v2 engine smoke test
+        shell: pwsh
+        run: ./scripts/Test-DscV2Smoke.ps1 -Verbose
+
+      # Runs the build/teardown lifecycle integration suite through a real Invoke-DscResource
+      # (Tests/PipelineRunner/Intergration/Tests/DscV2Engine-RealInvokeDscResource.Integration.tests.ps1).
+      - name: Run DSC v2 real-engine integration tests
+        shell: pwsh
+        run: ./scripts/Invoke-DscV2SelfHostedTests.ps1
+
+      # Validates Actions/Target/WinRM.ps1 against a live WinRM listener rather than the mocked
+      # New-CimSession/New-PSSession the unit suite uses
+      # (Tests/PipelineRunner/Intergration/Tests/WinRMTarget.Integration.tests.ps1). Connects to
+      # this runner itself, so it needs no second machine, and skips itself with a warning if the
+      # listener is unreachable.
+      - name: Run WinRM remoting integration tests
+        shell: pwsh
+        run: ./scripts/Invoke-RemotingSelfHostedTests.ps1
+
+      # Exercises the module's real DscV3 engine action (dsc.exe) against a live resource.
+      - name: Run DSC v3 engine smoke test
+        shell: pwsh
+        run: ./scripts/Test-DscV3Smoke.ps1 -Verbose
+
+      # Proves a compiled configuration, converted through the DscV3 document conversion path, is
+      # a valid DSC v3 document that dsc.exe accepts and evaluates.
+      - name: Verify compiled configuration is DSC v3-compliant
+        shell: pwsh
+        run: ./scripts/Test-DscV3ConfigDocument.ps1 -Verbose
+
+  ssh:
+    name: SSH remoting on self-hosted Linux
+    runs-on: [linux]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure PowerShell dependencies
+        shell: pwsh
+        run: |
+          if (-not (Get-Module -ListAvailable -Name Pester | Where-Object { $_.Version.Major -eq 5 })) {
+            Write-Host "Installing Pester (5.x) ..."
+            Install-Module -Name Pester -MinimumVersion '5.0.0' -MaximumVersion '5.9999.9999' `
+              -Force -Scope CurrentUser -AllowClobber -SkipPublisherCheck
+          }
+          # Best-effort: the live-vault suite (Credential/SecretManagement) skips gracefully with
+          # a warning when these are absent, so a missing/failed install here must not fail the
+          # job.
+          foreach ($m in 'Microsoft.PowerShell.SecretManagement', 'Microsoft.PowerShell.SecretStore') {
+            if (-not (Get-Module -ListAvailable -Name $m)) {
+              Write-Host "Installing $m ..."
+              Install-Module -Name $m -Force -Scope CurrentUser -AllowClobber -ErrorAction SilentlyContinue
+            }
+          }
+
+      # The SSH Target suite connects the runner to ITSELF over SSH. That needs no second machine
+      # and is still a genuine remote connection: the session is built by the real New-PSSession
+      # over the real ssh client and serviced by a separate pwsh process that sshd starts. Three
+      # things have to be true for it, and the suite skips (with the reason) when they are not:
+      #
+      #   * an sshd is listening,
+      #   * sshd has a 'powershell' subsystem registered - without it the connection succeeds and
+      #     the subsystem request is refused, which is the single most common reason PowerShell
+      #     SSH remoting "does not work" on a correctly reachable host,
+      #   * the runner account can authenticate to it non-interactively, i.e. by key, with the
+      #     host key already known.
+      #
+      # Idempotent: re-appending the Subsystem line and regenerating the key on every run would
+      # accumulate garbage on a persistent self-hosted runner (unlike an ephemeral hosted agent),
+      # so both are skipped when already present.
+      - name: Set up sshd with a PowerShell subsystem
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! command -v sshd >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y openssh-server
+          fi
+
+          if ! sudo grep -qF "Subsystem powershell $(command -v pwsh)" /etc/ssh/sshd_config 2>/dev/null; then
+            echo "Subsystem powershell $(command -v pwsh) -sshs -NoLogo" | sudo tee -a /etc/ssh/sshd_config
+            sudo systemctl enable ssh
+            sudo systemctl restart ssh
+          fi
+
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          if [ ! -f ~/.ssh/id_ed25519 ]; then
+            ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519
+          fi
+          if ! grep -qF "$(cat ~/.ssh/id_ed25519.pub)" ~/.ssh/authorized_keys 2>/dev/null; then
+            cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys
+            chmod 600 ~/.ssh/authorized_keys
+          fi
+          ssh-keyscan -H localhost >> ~/.ssh/known_hosts 2>/dev/null
+
+          # Fail the step here, not inside the suite: a broken loopback would otherwise show up as
+          # a skip, and a suite that can only skip proves nothing.
+          ssh -o BatchMode=yes localhost 'echo ssh loopback ok'
+
+          echo "PIPELINERUNNER_SSH_TARGET=localhost" >> "$GITHUB_ENV"
+          echo "PIPELINERUNNER_SSH_KEY=$HOME/.ssh/id_ed25519" >> "$GITHUB_ENV"
+
+      # dsc has no remoting of its own - the DscV3 engine reaches a remote target by running dsc
+      # ON THAT TARGET over the session - so the SSH suite's engine assertion needs a dsc the
+      # REMOTE account can find. $GITHUB_PATH cannot deliver that: it applies to this job's own
+      # steps, not to the non-interactive login shell sshd starts. Hence the copy into
+      # /usr/local/bin, which is on sshd's default PATH. Best-effort: the suite's own DscV3-over-
+      # SSH test skips itself (with the reason) when the remote side has no dsc, so a failure here
+      # must not fail the job.
+      - name: Bootstrap DSC v3 (dsc) for the remote side
+        shell: pwsh
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if (Get-Command -Name dsc -CommandType Application -ErrorAction SilentlyContinue) {
+            Write-Host "dsc already present: $((Get-Command dsc).Source)"
+          }
+          else {
+            $dsc = ./scripts/Install-DscV3.ps1 -Verbose
+            $installDirectory = Split-Path -Parent $dsc
+            sudo cp -r "$installDirectory/." /usr/local/bin/
+          }
+          & /usr/local/bin/dsc --version
+
+      # Runs the suites that need a real dependency but not a real Windows host: SSH remoting,
+      # notify/using(), preCondition/postCondition, the extended function language, and -
+      # opt-in only - Credential/SecretManagement against a live vault. Selected by the
+      # 'HostedIntegration' tag rather than 'Integration', which also matches
+      # WinRMTarget.Integration.tests.ps1 ('RemotingSelfHosted'),
+      # DscV2Engine-RealInvokeDscResource.Integration.tests.ps1 ('DscV2SelfHosted', both belong on
+      # the Windows job above) and the pre-existing
+      # Invoke-DscPipelineRunner.tests.ps1 (Windows-only Install-Dependencies helper).
+      #
+      # PIPELINERUNNER_ALLOW_SECRETSTORE_RESET opts the live-vault suite into reconfiguring
+      # SecretStore for unattended use, which erases the runner account's existing secrets. Off
+      # by default because this runner is a persistent self-hosted machine, not an ephemeral
+      # hosted agent: set the repository/environment variable
+      # PIPELINERUNNER_ALLOW_SECRETSTORE_RESET to 'true' only on a runner known to be
+      # disposable/dedicated to this pipeline. Left unset, that suite skips itself with a warning
+      # and every other suite in this job still runs.
+      - name: Run hosted-capable integration tests
+        shell: pwsh
+        env:
+          PIPELINERUNNER_ALLOW_SECRETSTORE_RESET: ${{ vars.PIPELINERUNNER_ALLOW_SECRETSTORE_RESET }}
+        run: |
+          Import-Module -Name Pester -MinimumVersion '5.0.0' -MaximumVersion '5.9999.9999' -Force -ErrorAction Stop
+          Import-Module -Name (Join-Path (Get-Location) 'Tests/TestHelpers/CommonTestFunctions.psm1') -Force
+          Remove-Variable -Name RepositoryRoot -Scope Global -ErrorAction SilentlyContinue
+          Remove-Variable -Name TestPaths      -Scope Global -ErrorAction SilentlyContinue
+
+          $config = New-PesterConfiguration
+          $config.Run.Path         = Join-Path (Get-Location) 'Tests/PipelineRunner/Intergration/Tests'
+          $config.Filter.Tag       = @('HostedIntegration')
+          $config.Output.Verbosity = 'Detailed'
+          $config.Run.Exit         = $true
+
+          Invoke-Pester -Configuration $config

@@ -1,0 +1,82 @@
+<#
+Mocked by design: this suite mocks New-CimSession/New-PSSession so it can assert the action's
+dispatch/parameter-passing logic on any host, including a host with no WSMan stack at all.
+#>
+Describe "WinRM Function Tests" -Tag Unit, PipelineRunner, Target {
+
+    BeforeAll {
+        $script:WinRMPath = (Get-FunctionPath 'WinRM.ps1').FullName
+
+        # New-CimSession comes from the CimCmdlets module, which ships with Windows PowerShell
+        # but is not present on the Linux/macOS PowerShell used by this CI job. Define a stub so
+        # it resolves for Get-Command / Mock to attach to.
+        function New-CimSession {
+            param($ComputerName, $Credential)
+        }
+
+        # New-PSSession IS present on this CI image (it's core PowerShell remoting), but its real
+        # -Credential parameter is typed [pscredential] - a sealed class the fake credential object
+        # used below cannot satisfy. Pester's Mock inherits the target command's real parameter
+        # metadata, so shadow it too, loosely typed, before mocking it.
+        function New-PSSession {
+            param($ComputerName, $Credential, $ConfigurationName)
+        }
+
+        Mock -CommandName New-CimSession -MockWith {
+            param($ComputerName, $Credential)
+            return [pscustomobject]@{ Marker = 'cim'; ComputerName = $ComputerName }
+        }
+        Mock -CommandName New-PSSession -MockWith {
+            param($ComputerName, $Credential, $ConfigurationName)
+            return [pscustomobject]@{ Marker = 'ps'; ComputerName = $ComputerName }
+        }
+    }
+
+    It "Throws when ComputerName is not supplied" {
+        { & $script:WinRMPath -Context @{} } | Should -Throw "*ComputerName*"
+    }
+
+    It "Opens both a CimSession and a PSSession for the target computer" {
+        $result = & $script:WinRMPath -Context @{ ComputerName = 'node01' }
+
+        $result.IsRemote | Should -BeTrue
+        $result.ComputerName | Should -Be 'node01'
+        $result.CimSession.Marker | Should -Be 'cim'
+        $result.PSSession.Marker | Should -Be 'ps'
+
+        Assert-MockCalled -CommandName New-CimSession -ParameterFilter { $ComputerName -eq 'node01' } -Exactly 1 -Scope It
+        Assert-MockCalled -CommandName New-PSSession -ParameterFilter { $ComputerName -eq 'node01' } -Exactly 1 -Scope It
+    }
+
+    It "Forwards ConfigurationName to the PSSession only" {
+        # New-CimSession has no -ConfigurationName: a CIM connection has no PowerShell endpoint to
+        # choose, and passing one would fail to bind.
+        $null = & $script:WinRMPath -Context @{ ComputerName = 'node01'; ConfigurationName = 'PowerShell.7' }
+
+        Assert-MockCalled -CommandName New-PSSession -ParameterFilter { $ConfigurationName -eq 'PowerShell.7' } -Exactly 1 -Scope It
+        Assert-MockCalled -CommandName New-CimSession -ParameterFilter { $ComputerName -eq 'node01' } -Exactly 1 -Scope It
+    }
+
+    It "Omits ConfigurationName entirely when the target does not name an endpoint" {
+        # The default remains the host's default endpoint.
+        $null = & $script:WinRMPath -Context @{ ComputerName = 'node01' }
+
+        Assert-MockCalled -CommandName New-PSSession -ParameterFilter { $null -eq $ConfigurationName } -Exactly 1 -Scope It
+    }
+
+    It "Forwards a supplied Credential to both session constructors" {
+        $cred = [pscustomobject]@{ Marker = 'fake-credential' }
+
+        $null = & $script:WinRMPath -Context @{ ComputerName = 'node01'; Credential = $cred }
+
+        Assert-MockCalled -CommandName New-CimSession -ParameterFilter { $Credential -eq $cred } -Exactly 1 -Scope It
+        Assert-MockCalled -CommandName New-PSSession -ParameterFilter { $Credential -eq $cred } -Exactly 1 -Scope It
+    }
+
+    It "Omits Credential entirely when the target does not supply one" {
+        $null = & $script:WinRMPath -Context @{ ComputerName = 'node01' }
+
+        Assert-MockCalled -CommandName New-CimSession -ParameterFilter { $null -eq $Credential } -Exactly 1 -Scope It
+        Assert-MockCalled -CommandName New-PSSession -ParameterFilter { $null -eq $Credential } -Exactly 1 -Scope It
+    }
+}

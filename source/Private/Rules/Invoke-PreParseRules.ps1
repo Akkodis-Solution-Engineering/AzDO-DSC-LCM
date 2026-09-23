@@ -1,12 +1,17 @@
 function Invoke-PreParseRules {
     param(
         [Parameter(Mandatory=$true)]
-        [Object[]]$Tasks
+        [Object[]]$Tasks,
+
+        # Resolved PipelineRunnerSettings (#57 §2), forwarded to every PreParse rule so rules
+        # like Test-ExecutionScriptsAllowed.ps1 can gate on configuration-level settings.
+        # Optional and defaulted so existing callers that don't pass it keep working unchanged.
+        [hashtable]$Settings = @{}
     )
 
     # Get the path to the PreParseRules directory
-    $currentPath = (Get-Module 'azdo-dsc-lcm').ModuleBase
-    $PreParseDirectoryPath = "{0}\LCM Rules\PreParse" -f $currentPath
+    $currentPath = (Get-Module 'DSC.PipelineRunner.Akkodis').ModuleBase
+    $PreParseDirectoryPath = "{0}\Pipeline Rules\PreParse" -f $currentPath
 
     #
     # Iterate through each of the PreParse Rules
@@ -24,6 +29,15 @@ function Invoke-PreParseRules {
     foreach ($File in $PreParseFiles) {
         Write-Verbose "[Invoke-PreParseRules] Processing PreParse Rule: $($File.FullName)"
         # Execute the PreParse Rule
-        . $File.FullName -PipelineResources $Tasks
+        # -Settings is forwarded only when the rule script actually declares that parameter
+        # (#57 §2), so a third-party/custom PreParse rule written against the pre-#57 contract
+        # (-PipelineResources only) keeps working unchanged instead of failing to bind an
+        # unrecognized named parameter.
+        $ruleParams = @{ PipelineResources = $Tasks }
+        $ruleCommand = Get-Command -Name $File.FullName -ErrorAction SilentlyContinue
+        if ($ruleCommand -and $ruleCommand.Parameters.ContainsKey('Settings')) {
+            $ruleParams.Settings = $Settings
+        }
+        . $File.FullName @ruleParams
     }
 }

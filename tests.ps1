@@ -14,9 +14,9 @@ Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)"
 
 $config = New-PesterConfiguration
 
-$config.Run.Path = ".\Tests\LCM"
+$config.Run.Path = ".\Tests\PipelineRunner"
 $config.Output.CIFormat = "GitHubActions"
-$config.CodeCoverage.Path = @( ".\source\Private", ".\source\Public", ".\LCM Rules\" )
+$config.CodeCoverage.Path = @( ".\source\Private", ".\source\Public", ".\source\Classes", ".\source\Enum", ".\Pipeline Rules\", ".\Actions\" )
 $config.CodeCoverage.OutputFormat = 'CoverageGutters'
 $config.CodeCoverage.OutputPath = ".\output\testResults\codeCoverage.xml"
 $config.CodeCoverage.OutputEncoding = 'utf8'

@@ -1,0 +1,57 @@
+# Compiles the wiki on every pull request so that wiki drift fails a PR rather than a release.
+#
+# The Release workflow compiles and publishes output/WikiContent to the repository wiki on full
+# (non-preview) releases only, and that step is deliberately non-fatal - a wiki failure must not
+# fail a release whose package has already been published. That leaves nothing enforcing the
+# wiki's own invariants at release time, so this gate does it at PR time instead: a page missing from .pageorder, a .pageorder entry with no page, or an
+# exported command with no .SYNOPSIS all throw out of scripts/Build-WikiContent.ps1.
+#
+# The build script reads comment-based help from the AST (Parser::ParseFile plus
+# FunctionDefinitionAst.GetHelpContent()) rather than importing the module, so this needs no
+# module resolution and no runtime dependencies - just a checkout and pwsh.
+
+name: Wiki (build gate)
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+  # Callable so this gate can be reused by another workflow. Nothing calls it today - the
+  # Release workflow compiles the wiki through Build_Wiki_Content instead, which throws on the
+  # same invariants.
+  workflow_call:
+
+# The group key names this workflow literally instead of using ${{ github.workflow }}. Inside a
+# `workflow_call` invocation that expression resolves to the CALLING workflow's name, so every
+# gate Release.yml reuses would land in one shared group and the gates that cancel in progress
+# would cancel their siblings before a runner was ever assigned to them.
+concurrency:
+  group: wiki-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  wiki:
+    name: Build wiki content
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build wiki content
+        shell: pwsh
+        run: |
+          $result = ./scripts/Build-WikiContent.ps1 -SourcePath $PWD -OutputPath ./output/WikiContent
+          Write-Host ("Built {0} conceptual page(s) and {1} command page(s); {2} total." -f `
+              $result.ConceptualPages, $result.CommandPages, $result.TotalPages)
+
+      - name: Upload wiki content
+        uses: actions/upload-artifact@v4
+        with:
+          name: wiki-content
+          path: output/WikiContent
+          if-no-files-found: error

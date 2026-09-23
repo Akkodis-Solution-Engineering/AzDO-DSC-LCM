@@ -27,8 +27,10 @@ BuildWorkflow:
     - Clean
     - Increment_Version
     - Build_Module_ModuleBuilder
-    - Copy_LCM_Rules
+    - Copy_Pipeline_Rules
+    - Copy_Actions
     - Copy_ChangeLog
+    - Build_Wiki_Content
 
   pack:
     - Package_Module

@@ -1,6 +1,5 @@
 output/*
 internal-tests/
-LCM/Datum/*
 
 **.bak
 *.local.*
@@ -18,4 +17,3 @@ LCM/Datum/*
 
 TestItems/*
 WorkDirectory/*
-source/azdo-dsc-lcm.psd1

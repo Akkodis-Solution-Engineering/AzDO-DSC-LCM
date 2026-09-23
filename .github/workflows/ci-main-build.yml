@@ -37,33 +37,8 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: ${{ github.run_id }}
-          path: ./output/azdo-dsc-lcm/
+          path: ./output/DSC.PipelineRunner.Akkodis/
 
-  release:
-    needs: build  
-    runs-on: ubuntu-latest
-    steps:
-
-      - env:
-          BUILD_VERSION: ${{ needs.build.outputs.build-version }}
-        name: Set Version
-        run: echo "BUILD_VERSION=${BUILD_VERSION}" >> $GITHUB_ENV
-
-      - name: Step 0 - Print Version
-        shell: pwsh
-        run: write-host $("${{ env.BUILD_VERSION }}-${{ github.run_number }}")
-
-      - name: Step 1 - Download Artifact
-        uses: actions/download-artifact@v3
-        with:
-          name: ${{ github.run_id }}
-
-      - name: Step 2 - Create GitHub Release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          release_name: ${{ github.repository }} PR Candidate - ${{ env.BUILD_VERSION }}-${{ github.run_number }}
-          tag_name: ${{ env.BUILD_VERSION }}-${{ github.run_number }}
-          prerelease: true
+# Releasing is now tag-driven - see Release.yml. This workflow validates that main still
+# builds and packages cleanly on every push; it no longer creates a GitHub Release itself.
 

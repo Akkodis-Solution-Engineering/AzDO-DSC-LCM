@@ -86,11 +86,9 @@
     # NestedModules = @()
 
     # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
-    FunctionsToExport = @()
-
-    # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
-    CmdletsToExport = @(
+    FunctionsToExport = @(
         'Build-DatumConfiguration'
+        'ConvertTo-DscV3ConfigurationDocument'
         'Invoke-DscPipelineRunner'
         'Invoke-DscRunner'
         'Resolve-DscDatumProject'
@@ -98,8 +96,12 @@
         'Test-DatumConfiguration'
     )
 
+    # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
+    # This module ships no binary cmdlets - the commands above are advanced functions.
+    CmdletsToExport = @()
+
     # Variables to export from this module
-    VariablesToExport = '*'
+    VariablesToExport = @()
 
     # Aliases to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no aliases to export.
     AliasesToExport = @()

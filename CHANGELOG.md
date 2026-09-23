@@ -25,3 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Issues with Build script running on 'ubuntu-latest'. Issues with pwsh core handling classes.
 - Fixed Bugs within the Symantec Versioning script. Wasn't detecting tag versions.
+- The module manifest listed all seven public commands under `CmdletsToExport` instead of
+  `FunctionsToExport`, even though every one of them is an advanced function, not a binary
+  cmdlet - `Import-Module DSC.PipelineRunner.Akkodis` exported none of its public commands.
+  Moved them to `FunctionsToExport` (and added `ConvertTo-DscV3ConfigurationDocument`, which
+  wasn't listed anywhere) and set `CmdletsToExport = @()`. Also tightened `VariablesToExport`
+  from `'*'` to `@()`, which previously leaked the module's internal `$references`/`$variables`/
+  `$parameters` state into every caller's session.

@@ -234,3 +234,10 @@ $settings['Engine']
 `Get-PipelineRunnerSetting` is module-private. It returns `$null` — rather than throwing —
 when the directory has no definition file or the file has no `PipelineRunnerSettings` block,
 so every caller falls back to defaults.
+
+## See also
+
+- [docs/lifecycle-scripting-and-reboot-handling.md](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/blob/main/docs/lifecycle-scripting-and-reboot-handling.md)
+  — the design history behind the `Reboot` setting.
+- [docs/dsc-v3-config-functions.md](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/blob/main/docs/dsc-v3-config-functions.md)
+  — the proposed (unimplemented) `ConfigFunctionMode` setting.

@@ -434,3 +434,13 @@ Logs are redacted on two grounds: any property that started life as a `[pscreden
 `[securestring]` is force-redacted regardless of its name, and a name-based heuristic catches
 the rest. The pre-parse property rule likewise names an offending property and its permitted
 values, never the value itself — that goes only to the verbose stream, redacted.
+
+## See also
+
+- [docs/remote-target-credential-handling.md](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/blob/main/docs/remote-target-credential-handling.md)
+  — the design history behind the `Target`/`Credential` hooks documented on this page.
+- [docs/lifecycle-scripting-and-reboot-handling.md](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/blob/main/docs/lifecycle-scripting-and-reboot-handling.md)
+  — the design history behind reboot handling, including why a remote target restarts
+  unconditionally.
+- [docs/trust-model.md](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/blob/main/docs/trust-model.md)
+  — how the `Target`/`Credential` hooks extend the trust boundary to remote hosts.

@@ -252,3 +252,13 @@ PipelineRunnerSettings:
   there is no CIM-over-SSH transport for `Invoke-DscResource`.
 - **Migrating** ⇒ the two engines need different `type` spellings, so a configuration cannot
   straddle both. Move a whole configuration at a time.
+
+## See also
+
+- [docs/dsc-v3.md](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/blob/main/docs/dsc-v3.md)
+  — converting a compiled configuration into a schema-valid DSC v3 configuration document with
+  `ConvertTo-DscV3ConfigurationDocument`.
+- [docs/hosted-agent-dsc-v3.md](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/blob/main/docs/hosted-agent-dsc-v3.md)
+  — running the `DscV3` engine on a hosted Linux agent.
+- [docs/dsc-v3-config-functions.md](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/blob/main/docs/dsc-v3-config-functions.md)
+  — the (unimplemented) design plan for DSC v3's own native `[functionName(...)]` syntax.

@@ -212,3 +212,11 @@ by default, and DSC's own progress UI is suppressed so it does not flood a pipel
 are restored on return.
 
 Per-resource diagnostics go to the verbose stream; add `-Verbose` when you need them.
+
+## See also
+
+- [docs/lifecycle-scripting-and-reboot-handling.md](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/blob/main/docs/lifecycle-scripting-and-reboot-handling.md)
+  — the design history behind `preCondition`/`postCondition`/`preExecutionScript` and reboot
+  handling.
+- [docs/notify-and-using.md](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/blob/main/docs/notify-and-using.md)
+  — a focused write-up of the notify propagation step above.

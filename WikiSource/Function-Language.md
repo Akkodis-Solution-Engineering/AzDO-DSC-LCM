@@ -650,3 +650,12 @@ command set.
 
 Execution scripts are **not** subject to any of this. They are arbitrary PowerShell, which is
 why they sit behind `AllowExecutionScripts`.
+
+## See also
+
+- [docs/notify-and-using.md](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/blob/main/docs/notify-and-using.md)
+  — a focused write-up of `notify`/`using()` as a Puppet/Chef-style relationship.
+- [docs/trust-model.md](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/blob/main/docs/trust-model.md)
+  — why a condition's allow-list is shaped the way it is, and why there is no `secret()`.
+- [docs/dsc-v3-config-functions.md](https://github.com/Akkodis-Solution-Engineering/AzDO-DSC-LCM/blob/main/docs/dsc-v3-config-functions.md)
+  — the (unimplemented) plan for DSC v3's own, separate `[functionName(...)]` syntax.

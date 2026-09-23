@@ -16,7 +16,7 @@ $config = New-PesterConfiguration
 
 $config.Run.Path = ".\Tests\PipelineRunner"
 $config.Output.CIFormat = "GitHubActions"
-$config.CodeCoverage.Path = @( ".\source\Private", ".\source\Public", ".\Pipeline Rules\" )
+$config.CodeCoverage.Path = @( ".\source\Private", ".\source\Public", ".\source\Classes", ".\source\Enum", ".\Pipeline Rules\", ".\Actions\" )
 $config.CodeCoverage.OutputFormat = 'CoverageGutters'
 $config.CodeCoverage.OutputPath = ".\output\testResults\codeCoverage.xml"
 $config.CodeCoverage.OutputEncoding = 'utf8'

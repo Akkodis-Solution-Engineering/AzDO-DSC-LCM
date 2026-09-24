@@ -356,4 +356,57 @@ function Get-SshRemotingSkipReason {
     return $null
 }
 
-Export-ModuleMember -Function Split-RecurivePath, Get-FunctionPath, Find-Functions, Get-ClassFilePath, Import-Enums, New-MockDirectoryPath, New-MockFilePath, Install-Dependencies, Copy-TestCasesToTempDrive, Get-ModulePath, Get-WinRMSkipReason, Get-LiveVaultSkipReason, Get-SshRemotingSkipReason
+<#
+.SYNOPSIS
+Captures the process environment so a suite can put it back in AfterAll.
+
+.DESCRIPTION
+Every Pester file in a run shares one process. A suite that drives a real runner pass leaks
+into that process environment: Set-Variables publishes each configuration variable as an env
+var (a variable named 'ProjectName' becomes $env:ProjectName), and some suites prepend fixture
+paths to PSModulePath. The files that run later inherit that state. Invoke-DscPipelineRunner.tests.ps1
+calls Build.ps1, which reads 'property ProjectName' from the environment, so a leaked value
+makes it build a module that does not exist and its BeforeAll fails.
+#>
+function Save-ProcessEnvironment {
+    [CmdletBinding()]
+    [OutputType([hashtable])]
+    param()
+
+    $snapshot = @{}
+    foreach ($entry in [System.Environment]::GetEnvironmentVariables([System.EnvironmentVariableTarget]::Process).GetEnumerator()) {
+        $snapshot[[string]$entry.Key] = [string]$entry.Value
+    }
+    return $snapshot
+}
+
+<#
+.SYNOPSIS
+Restores the process environment captured by Save-ProcessEnvironment. It removes variables
+that were added since the snapshot and resets variables that changed.
+#>
+function Restore-ProcessEnvironment {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [AllowNull()]
+        [hashtable]$Snapshot
+    )
+
+    # BeforeAll may have thrown before the snapshot was taken; leave the environment alone then.
+    if ($null -eq $Snapshot) { return }
+
+    $current = [System.Environment]::GetEnvironmentVariables([System.EnvironmentVariableTarget]::Process)
+    foreach ($name in @($current.Keys)) {
+        if (-not $Snapshot.ContainsKey([string]$name)) {
+            [System.Environment]::SetEnvironmentVariable([string]$name, $null, [System.EnvironmentVariableTarget]::Process)
+        }
+    }
+    foreach ($name in $Snapshot.Keys) {
+        if ($current[$name] -ne $Snapshot[$name]) {
+            [System.Environment]::SetEnvironmentVariable($name, $Snapshot[$name], [System.EnvironmentVariableTarget]::Process)
+        }
+    }
+}
+
+Export-ModuleMember -Function Split-RecurivePath, Get-FunctionPath, Find-Functions, Get-ClassFilePath, Import-Enums, New-MockDirectoryPath, New-MockFilePath, Install-Dependencies, Copy-TestCasesToTempDrive, Get-ModulePath, Get-WinRMSkipReason, Get-LiveVaultSkipReason, Get-SshRemotingSkipReason, Save-ProcessEnvironment, Restore-ProcessEnvironment

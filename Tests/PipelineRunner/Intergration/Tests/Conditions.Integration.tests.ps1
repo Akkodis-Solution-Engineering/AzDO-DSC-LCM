@@ -1,5 +1,9 @@
 Describe "preCondition/postCondition through a real runner pass" -Tag Integration, HostedIntegration {
 
+    AfterAll {
+        Restore-ProcessEnvironment -Snapshot $script:ProcessEnvironment
+    }
+
     # preCondition and postCondition are well covered in isolation: Assert-SafeConditionExpression.tests.ps1
     # drives the predicate allow-list against raw strings, and Start-DscRunner.tests.ps1 asserts the
     # skip/fail semantics with the configuration file itself mocked away.
@@ -28,6 +32,8 @@ Describe "preCondition/postCondition through a real runner pass" -Tag Integratio
     # suite is hermetic and cross-platform - no Invoke-DscResource, no dsc.exe.
 
     BeforeAll {
+        # Suites share one process; see Save-ProcessEnvironment for why this matters.
+        $script:ProcessEnvironment = Save-ProcessEnvironment
 
         # This repo's class-based configuration parsing chain (MERGE-PLAN.md §4-5), which
         # Start-DscRunner's [DSCConfigurationFile]::New() call and ConvertTo-PipelineTask depend

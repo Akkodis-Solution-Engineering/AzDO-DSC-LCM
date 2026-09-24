@@ -1,5 +1,9 @@
 Describe "the extended function language through a real runner pass" -Tag Integration, HostedIntegration {
 
+    AfterAll {
+        Restore-ProcessEnvironment -Snapshot $script:ProcessEnvironment
+    }
+
     # Arithmetic.tests.ps1, StringFunctions.tests.ps1 and RunContext.tests.ps1 drive each accessor
     # directly, and Assert-SafeConditionExpression.tests.ps1 drives the allow-list against raw
     # strings. Neither proves that an accessor AUTHORED IN A CONFIGURATION FILE reaches a decision,
@@ -29,6 +33,8 @@ Describe "the extended function language through a real runner pass" -Tag Integr
     # hermetic and cross-platform.
 
     BeforeAll {
+        # Suites share one process; see Save-ProcessEnvironment for why this matters.
+        $script:ProcessEnvironment = Save-ProcessEnvironment
 
         # This repo's class-based configuration parsing chain (MERGE-PLAN.md §4-5), which
         # Start-DscRunner's [DSCConfigurationFile]::New() call and ConvertTo-PipelineTask depend

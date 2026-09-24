@@ -1,5 +1,9 @@
 Describe "DSC v2 environment lifecycle through a real Invoke-DscResource" -Tag Integration, DscV2SelfHosted {
 
+    AfterAll {
+        Restore-ProcessEnvironment -Snapshot $script:ProcessEnvironment
+    }
+
     # This suite proves the runner can stand up ("build") and tear down an environment end-to-end
     # through the REAL DSC v2 engine -- Actions/Engine/DscV2.ps1 -> Invoke-DscResource -- with NO
     # engine mock. Invoke-DscResource genuinely runs a live, dependency-free class-based resource
@@ -34,6 +38,8 @@ Describe "DSC v2 environment lifecycle through a real Invoke-DscResource" -Tag I
     # engine action file resolves without an installed module.
 
     BeforeAll {
+        # Suites share one process; see Save-ProcessEnvironment for why this matters.
+        $script:ProcessEnvironment = Save-ProcessEnvironment
 
         # The DSC v2 engine must be usable on this host.
         if (-not (Get-Command -Name Invoke-DscResource -ErrorAction SilentlyContinue)) {

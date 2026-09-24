@@ -1,7 +1,13 @@
 
 Describe "Invoke-DscPipelineRunner Intergration Tests" -Tag Integration {
 
+    AfterAll {
+        Restore-ProcessEnvironment -Snapshot $script:ProcessEnvironment
+    }
+
     BeforeAll {
+        # Suites share one process; see Save-ProcessEnvironment for why this matters.
+        $script:ProcessEnvironment = Save-ProcessEnvironment
         # Perform the latest build. This will ensure that the latest version of the module is loaded.
         . .\Build.ps1 -Tasks Build
 

@@ -10,21 +10,23 @@
 
 ## Overview
 
-`DSC.PipelineRunner.Akkodis` is a pipeline runner for Desired State Configuration (DSC). Its execution engine is resource-agnostic — it invokes whatever DSC resource module a compiled configuration's `type:` fields reference, so it isn't limited to the `AzureDevOpsDsc` DSC Module. It utilizes Datum to merge configuration stubs into larger pieces of configuration which is parsed into the pipeline runner.
+`DSC.PipelineRunner.Akkodis` is a pipeline runner for Desired State Configuration (DSC). Its execution engine is resource-agnostic — it invokes whatever DSC resource module a compiled configuration's `type:` fields reference, so it isn't limited to the `AzureDevOpsDscNative` DSC resource module. It utilizes Datum to merge configuration stubs into larger pieces of configuration which is parsed into the pipeline runner.
 
 Two public entry points build on this same engine:
 
-- `Invoke-DscPipelineRunner`: the Azure DevOps-flavored entry point. Authenticates to Azure DevOps (Managed Identity or PAT) and is the recommended choice for configurations that manage `AzureDevOpsDsc` resources.
-- `Invoke-DscRunner`: a generic entry point with no Azure DevOps dependency at all — no `AzureDevOpsDsc`/`AzureDevOpsDsc.Common` install required. Use this if your configuration targets other DSC resource modules; authenticate to whatever those resources require using their own mechanism before calling it. See [Using Invoke-DscRunner Directly (Non-Azure DevOps Consumers)](#using-invoke-dscrunner-directly-non-azure-devops-consumers) for details.
+- `Invoke-DscPipelineRunner`: the Azure DevOps-flavored entry point. Authenticates to Azure DevOps (Managed Identity or PAT) and is the recommended choice for configurations that manage `AzureDevOpsDscNative` resources.
+- `Invoke-DscRunner`: a generic entry point with no Azure DevOps dependency at all — no `AzureDevOpsDscNative`/`AzureDevOpsDsc.Common` install required. Use this if your configuration targets other DSC resource modules; authenticate to whatever those resources require using their own mechanism before calling it. See [Using Invoke-DscRunner Directly (Non-Azure DevOps Consumers)](#using-invoke-dscrunner-directly-non-azure-devops-consumers) for details.
 
 ## Datum
 
-This project utilizes Datum from Gael Colas to streamline configuration. For more information on how to implement and use it, please refer to the [official documentation or Gael Colas' resources.](https://github.com/gaelcolas/Datum)
+This module utilizes Datum from Gael Colas to streamline configuration. For more information on how to implement and use it, please refer to the [official documentation or Gael Colas' resources.](https://github.com/gaelcolas/Datum)
+
+A complete, working configuration lives in [`Example Configuration`](Example%20Configuration). The snippets below are taken from it.
 
 ### Key Functions
 
-1. __Custom Datum Variable Interpolation__: Perform custom datum variable interpolation before pipeline runner initialization using the format `[x={ $Node.Project }=]`.
-1. __Runner-Based Calculated Properties__: Utilize PowerShell subexpressions for calculated properties, such as `$( (1 -eq 2 )? $true: $false )`, to dynamically determine values.
+1. __Custom Datum Variable Interpolation__: Perform custom datum variable interpolation before runner initialization using the format `[x={ $Node.Project }=]`.
+1. __Calculated Properties__: Utilize PowerShell subexpressions for calculated properties, such as `$( (1 -eq 2 )? $true: $false )`, to dynamically determine values.
 1. __Custom Variables__: Define and reference custom variables within resource properties.
 
     __Variable Configuration__
@@ -39,97 +41,203 @@ This project utilizes Datum from Gael Colas to streamline configuration. For mor
 
     ```yaml
     - name: CON Board Administrators
-      condition: $ProjectWorkBoardsStatus -eq 'enabled'
-      type: AzureDevOpsDsc/AzDoProjectGroup
+      preCondition: equals (variables 'ProjectWorkBoardsStatus') 'enabled'
+      type: AzureDevOpsDscNative/AzDoProjectGroup
       dependsOn:
-        - AzureDevOpsDsc/AzDoProject/Project
+        - AzureDevOpsDscNative/AzDoProject/Project
       properties:
-        ProjectName: $ProjectName
-        GroupName: $GroupName
+        ProjectName: $(variables('ProjectName'))
+        GroupName: $(variables('GroupName'))
     ```
 
-1. __Modular Pipeline Runner Formatting and Validation Rules__: Incorporate modular scripts stored in the `\Pipeline Rules\` directory into the module build process. These scripts are responsible for validating and formatting configuration resources to meet specific requirements. They can be modified and extended as needed. The current set of scripts includes:
+1. __Modular Pipeline Formatting and Validation Rules__: Incorporate modular scripts stored in the `\Pipeline Rules\` directory into the module build process. These scripts are responsible for validating and formatting configuration resources to meet specific requirements. They can be modified and extended as needed. The current set of scripts includes:
 
-    - `Pipeline Rules\PreParse\Test-CircularReferences.ps1`: Checks for circular references within resources. If this script detects an error, the pipeline runner will not apply any changes.
-    - `Pipeline Rules\PreParse\Test-ResourceForIncorrectProperties`: Validates resource properties against documented specifications. Errors prevent the pipeline runner from applying changes.
-    - `Pipeline Rules\Custom\Sort-DependsOn.ps1`: Orders resources in the YAML file based on their `dependsOn` property. This script is mandatory and cannot be bypassed.
+    - `Pipeline Rules\PreParse\Test-CircularReferences.ps1`: Walks the `dependsOn` graph and
+      rejects genuine cycles, including a resource that depends on itself. A resource reached
+      by more than one branch — a diamond, or any other shared dependency — is not a cycle and
+      is allowed. If this script detects an error, the runner will not apply any changes.
+    - `Pipeline Rules\PreParse\Test-ResourcesForIncorrectProperties.ps1`: Validates resource properties against documented specifications. Errors prevent the runner from applying changes.
+    - `Pipeline Rules\PreParse\Test-ExecutionScriptsAllowed.ps1`: Rejects any `preExecutionScript`/`postExecutionScript` unless `PipelineRunnerSettings.AllowExecutionScripts` is `true`.
+    - `Pipeline Rules\Custom\Merge-StubResources.ps1`: Merges stub (partial) resources into their `merge_with` target.
+    - `Pipeline Rules\Custom\Expand-CompositeResources.ps1`: Replaces each composite resource with the resources of the file it links to.
+    - `Pipeline Rules\Custom\Sort-DependsOn.ps1`: Orders resources based on their `dependsOn` property. This script is mandatory and cannot be bypassed.
+    - `Pipeline Rules\Format\`: Directory reserved for format rules that pre-process task properties before execution.
 
 1. __Versioned Configuration__: Ensure all versions are managed by the pipeline runner to avoid unforeseen issues as new features are introduced.
 
     __Datum.yml__
 
     ```yaml
-    PipelineRunnerVersionSettings:
-      ConfigurationVersion: 1.0
-      PipelineRunnerVersion: 1.0
-      DSCResourceVersion: 1.0
+    PipelineRunnerSettings:
+      ConfigurationVersion: 0.5
+      PipelineRunnerVersion: 0.0.5
+      Engine: DscV2
     ```
 
-1. __ConfigurationMode Change Windows__: Datum.yml includes settings that enable administrators to specify the ConfigurationMode and the associated change windows. Configuration Modes are:
+    `ConfigurationVersion` tracks the configuration's own YAML shape and must be bumped
+    whenever the configuration's structure changes; `PipelineRunnerVersion` should reflect
+    the `DSC.PipelineRunner.Akkodis` module version the configuration was authored/tested against
+    (`ModuleVersion` in `source/DSC.PipelineRunner.Akkodis.psd1`).
 
-    - Audit: This mode allows for monitoring and reporting without making any changes to the system.
-    - Enforce: In this mode, the system actively applies the defined configurations, ensuring compliance.
-    - ApplyOnly: This mode applies the configurations but does not perform any auditing or enforcement actions.
-    - Scheduled: This mode allows configurations to be applied at specified times, providing flexibility in management.
+    The runner enforces the following version constraints (defined in `source\Public\VersionConfiguration.ps1`):
+
+    | Setting | Minimum | Maximum |
+    |---|---|---|
+    | `ConfigurationVersion` | `0.1` | `0.9` |
+    | `PSDesiredStateConfiguration` module | `2.0` | `2.9` |
+    | `DSC.PipelineRunner.Akkodis` module | `0.0.1` | `1.9` |
+
+    See the [PipelineRunnerSettings](https://github.com/Akkodis-Solution-Engineering/DSC.PipelineRunner.Akkodis/wiki/PipelineRunnerSettings) wiki page for every key (`Engine`, `AllowExecutionScripts`, `Reboot`, `Target`).
+
+1. __ConfigurationMode Change Windows__: Datum.yml includes a `PipelineConfigurationMode` block that lets administrators specify the ConfigurationMode and the associated change windows. Configuration Modes are:
+
+    - Audit: This mode allows for monitoring and reporting without making any changes to the system (`Test` only).
+    - Enforce: In this mode, the system actively applies the defined configurations and then re-tests each changed resource to verify the change landed.
+    - ApplyOnly: This mode applies the configurations (`Set`) without re-verifying them afterwards.
+    - Scheduled: This mode picks one of the three modes above from the change window that matches the current time.
 
     Execution Precedence: The following hierarchy determines the order in which the `ConfigurationMode` is applied:
 
-    1. `Invoke-DscPipelineRunner -ConfigurationMode` Parameter. Setting this property will override the configuration.
-    1. `PipelineConfigurationMode.PipelineConfigurationMode`. Configuring this property will establish it as the default setting. The possible values are 'ApplyOnly', 'Audit', 'Enforce', and 'Scheduled'.
-    1. `PipelineConfigurationMode.PipelineConfigurationMode.ChangeWindows`. Setting up Change Windows will define the times in UTC when the pipeline runner can operate in various modes. _If no change window is specified, it will revert to the default mode of 'Audit'. In cases of overlapping time windows, the first window will be chosen, and a warning will be issued._
+    1. `Invoke-DscPipelineRunner -ConfigurationMode` / `Invoke-DscRunner -ConfigurationMode` parameter. Setting this parameter will override the configuration.
+    1. `PipelineConfigurationMode.ConfigurationMode`. Configuring this property will establish it as the default setting. The possible values are 'ApplyOnly', 'Audit', 'Enforce', and 'Scheduled'.
+    1. `PipelineConfigurationMode.ChangeWindows`. When `ConfigurationMode` is `Scheduled`, the change windows define the times in UTC when the pipeline runner operates in each mode. _If no change window matches, it will revert to the default mode of 'Audit'. In cases of overlapping time windows, the first window will be chosen, and a warning will be issued._
 
-        ``` Text
-        [Get-PipelineRunnerConfigurationMode] Current time 00:00 is within Change Window: 23:00 - 02:00. Setting Pipeline Configuration Mode to ApplyOnly.
+        ```text
+        [Get-PipelineRunnerConfigurationMode] Current time 00:30 (Tuesday) is within Change Window: 00:00-02:00 on [Tuesday, Wednesday, Thursday]. Setting Pipeline Runner Configuration Mode to Enforce.
         [Get-PipelineRunnerConfigurationMode] Overlapping Change Windows detected in Datum Configuration PipelineConfigurationMode. The first matching window takes precedence.
         ```
 
-        Change Window Syntax:
+        Change Window Syntax (a window matches when `StartTime <= now < EndTime`, so a window cannot span midnight — split it into two windows instead):
 
         ```text
         [ArrayList] ChangeWindows:
-            [String] StartTime: UTC StartTime
-            [String] EndTime: UTC EndTime
+            [String] StartTime: UTC start time (HH:mm, inclusive)
+            [String] EndTime: UTC end time (HH:mm, exclusive)
             [String] ConfigurationMode: [Audit, Enforce, ApplyOnly]
+            [String[]] DaysOfWeek: Optional. Restricts the window to these UTC days.
         ```
 
-      Example:
+        Example:
 
-      ```yaml
-      PipelineConfigurationMode:
+        ```yaml
+        PipelineConfigurationMode:
           # The Pipeline Configuration Mode can be one of the following: ApplyOnly, Audit, Enforce, Scheduled
-          ConfigurationMode: Audit
-          # Define a Change Window Array that specifies when the configuration can be applied.
-          ChangeWindows:            
-              - StartTime: '20:00' # Start of the change window. Time is in UTC.
-              EndTime: '24:00' # End of the change window. Time is in UTC.
-              ConfigurationMode: Audit # The configuration mode for this change window.
-              - StartTime: '00:00'
+          ConfigurationMode: Scheduled
+          # All times are UTC. The first matching window takes precedence.
+          ChangeWindows:
+            - StartTime: '20:00'          # Audit every night.
+              EndTime: '23:59'
+              ConfigurationMode: Audit
+            - StartTime: '00:00'          # Enforce only during the Tuesday/Wednesday/Thursday maintenance window.
               EndTime: '02:00'
               ConfigurationMode: Enforce
-      ```
+              DaysOfWeek:
+                - Tuesday
+                - Wednesday
+                - Thursday
+        ```
 
 ### Enhanced Pipeline Runner Resource Features
 
 The pipeline runner provides a set of features applicable to all Desired State Configuration (DSC) resources, enhancing their flexibility and control. These features include:
 
-- __condition__: This feature allows conditional execution of resources. The condition is evaluated before the resource runs, and if it evaluates to `$true`, the resource is skipped. This is useful for dynamically controlling resource execution based on specific criteria.
+- __preCondition__ (formerly `condition`, which is still accepted as a deprecated alias):
+  This feature allows conditional execution of resources. The expression is evaluated as a
+  PowerShell predicate before the resource runs. If it evaluates to `$true`, the resource
+  executes; if it evaluates to `$false`, the resource is skipped. This is useful for
+  dynamically controlling resource execution based on specific criteria.
 
     __Example:__
 
     ```yaml
     - name: CON Board Administrators
-      condition: $ProjectWorkBoardsStatus -eq 'enabled'
-      type: AzureDevOpsDsc/AzDoProjectGroup
+      preCondition: equals (variables 'ProjectWorkBoardsStatus') 'enabled'
+      type: AzureDevOpsDscNative/AzDoProjectGroup
     ```
 
-- __postExecutionScript__: This feature triggers a script after the resource has been executed. It can be used to perform additional operations or clean-up tasks following the resource's execution. This is helpful for managing state changes or handling post-execution logic.
+    A preCondition may also call the function-language accessors — an explicit allow-list
+    covering lookups (`parameters()`, `variables()`, `reference()`, `using()`), run context
+    (`nodeName()`, `configurationFile()`), logic (`equals()`, `not()`), strings and collections
+    (`concat()`, `empty()`, `coalesce()`, `toLower()`, `toUpper()`, `startsWith()`,
+    `contains()`) and arithmetic (`add()`, `sub()`, `mul()`, `div()`, `mod()`, `min()`,
+    `max()`, `int()`, `float()`). Any other command invocation, a variable assignment, or a
+    method call is still rejected. There is deliberately no `secret()` accessor: a condition is
+    recorded verbatim in the audit record and in every SKIP message it produces, so secrets
+    reach a resource through its `resourceCredential` block instead. Unlike a bare
+    comparison, `parameters()`/`reference()` throw on a missing key or reference rather than
+    silently resolving to `$null`, so a typo fails just that resource instead of skipping it
+    unnoticed. These are ordinary PowerShell commands, so multi-argument calls take
+    space-separated arguments — `equals (parameters 'Environment') 'Prod'`, not
+    `equals(parameters('Environment'), 'Prod')` — the comma-in-parens form parses as a single
+    array argument and silently mis-binds:
+
+    ```yaml
+    - name: CON Board Administrators
+      preCondition: (parameters('Environment')) -eq 'Prod' -and (variables('ProjectWorkBoardsStatus')) -eq 'enabled'
+      type: AzureDevOpsDscNative/AzDoProjectGroup
+    ```
+
+- __postCondition__: evaluated after the resource's `Test`/`Set`, before `postExecutionScript`.
+  A `$false` result marks the resource `FAIL` regardless of what the engine itself reported —
+  it asserts something about the *outcome*, where `preCondition` decides whether the resource
+  runs at all. It is parsed by the same predicate allow-list as `preCondition`, plus two
+  accessors reserved for `postCondition` only: `result()` (the resource's normalized engine
+  result — `InDesiredState` / `RebootRequired` / `Message` / `Raw`) and `stopProcessing()` (see
+  below).
+
+    __Example:__
+
+    ```yaml
+    - name: Project Services
+      type: AzureDevOpsDscNative/AzDoProjectServices
+      postCondition: result().InDesiredState -or (not (equals (variables 'Project_Ensure') 'Present'))
+    ```
+
+- __preExecutionScript__ / __postExecutionScript__: run arbitrary PowerShell immediately
+  before, or after, the resource's `Test`/`Set` evaluation. Useful for preparing state a
+  resource depends on, or for clean-up/state-change logic afterwards. Unlike a condition,
+  these are not restricted to a predicate — see `AllowExecutionScripts` below, which gates
+  their use. Unlike `properties`/`preCondition`/`postCondition`, these are not parsed through
+  `ExpandString` or `Assert-SafeConditionExpression` — they run as plain PowerShell, with
+  direct read access to the script-scope variable `Set-Variables` already created for each
+  Datum variable, so there is no need to go through the `variables()` accessor here.
 
     __Example:__
 
     ```yaml
     - name: Project
-      type: AzureDevOpsDsc/AzDoProject
+      type: AzureDevOpsDscNative/AzDoProject
       postExecutionScript: if ($Project_Ensure -eq 'Absent') { Stop-TaskProcessing }
+    ```
+
+- __AllowExecutionScripts__ (`PipelineRunnerSettings.AllowExecutionScripts`, default `false`):
+  a configuration-level gate on `preExecutionScript`/`postExecutionScript`. Because an
+  execution script runs unrestricted code in the runner's own process, a configuration must
+  opt in explicitly before any resource may carry one; otherwise the run fails at PreParse
+  time, naming every offending resource in one pass, before any resource is evaluated.
+
+    ```yaml
+    PipelineRunnerSettings:
+      AllowExecutionScripts: true
+    ```
+
+- __resourceCredential__: a declarative way to inject a resolved credential into a resource's
+  own properties (for example a resource's `-Credential` parameter) without the credential
+  ever appearing in the configuration file. It resolves through the `Credential` action hook
+  and, unlike `preExecutionScript`/`postExecutionScript`, works even when
+  `AllowExecutionScripts` is off — it is declarative, not a script.
+
+    __Example:__
+
+    ```yaml
+    - name: SQL Login
+      type: SqlServerDsc/SqlLogin
+      properties:
+        InstanceName: MSSQLSERVER
+      resourceCredential:
+        action: SecretManagement   # a file in Actions/Credential/ (default: Environment)
+        name: sql-service-account  # the secret name
+        propertyName: Credential   # the properties key the resolved PSCredential is written to (default: Credential)
     ```
 
 - __dependsOn__: This feature establishes a dependency chain, ensuring that resources are executed in a specific order. By defining dependencies, you can create a structured sequence of resource execution, where a resource will only run after its dependencies have successfully completed. This is particularly useful in complex configurations where the order of operations is critical.
@@ -138,11 +246,57 @@ The pipeline runner provides a set of features applicable to all Desired State C
 
     ```yaml
     - name: Default Git Configuration Permissions
-      type: AzureDevOpsDsc/AzDoGitPermission
+      type: AzureDevOpsDscNative/AzDoGitPermission
       dependsOn:
-        - AzureDevOpsDsc/AzDoProject/Project
-        - AzureDevOpsDsc/AzDoProjectGroup/CON Readers
-        - AzureDevOpsDsc/AzDoProjectGroup/CON Board Administrators
+        - AzureDevOpsDscNative/AzDoProject/Project
+        - AzureDevOpsDscNative/AzDoProjectGroup/CON Readers
+        - AzureDevOpsDscNative/AzDoProjectGroup/CON Board Administrators
+    ```
+
+- __notify__ / __using()__: a Puppet/Chef-style relationship between two resources, combining an
+  ordering guarantee with a data link. `notify` is a string or array of strings on the
+  *notifying* resource, each naming a target resource by the same `Type/Name` identity
+  `dependsOn` uses. The notifying resource is guaranteed to run first, and when it changes in a
+  `Set` pass every resource it notifies is forced through its own `Set()`. A notified resource
+  may read the notifying resource's `Get()` output with `using('Type/Name')`. Both halves are
+  scoped to a single configuration file — see [docs/notify-and-using.md](docs/notify-and-using.md).
+
+    __Example:__
+
+    ```yaml
+    resources:
+      - name: Project
+        type: AzureDevOpsDscNative/AzDoProject
+        properties:
+          ProjectName: Magenta
+        notify:
+          - AzureDevOpsDscNative/AzDoGitRepository/Default Repository
+
+      - name: Default Repository
+        type: AzureDevOpsDscNative/AzDoGitRepository
+        properties:
+          # Only readable here because 'Project' names this resource in its own notify list.
+          ProjectId: $((using 'AzureDevOpsDscNative/AzDoProject/Project').Id)
+    ```
+
+- __parameter tokens__: A resource property whose value is exactly `<params=Name>` is replaced
+  by the value of that pipeline parameter, with its type intact — a number stays a number, a
+  hashtable stays a hashtable. Values come from the configuration's own `parameters` section
+  (each parameter's `defaultValue`). Referencing a parameter that is not declared fails that
+  resource and records it in the run report; it does not silently resolve to `$null`.
+
+    __Example:__
+
+    ```yaml
+    parameters:
+      ServiceName:
+        defaultValue: Spooler
+
+    resources:
+      - name: Print Spooler
+        type: PSDscResources/Service
+        properties:
+          Name: <params=ServiceName>
     ```
 
 - __executionMethodOverride__: This feature lets a single resource pin its own execution method, overriding whatever `ConfigurationMode` the pipeline run is otherwise using for every other resource. The resource is still `Test`-ed first as normal; the override only changes what happens when that `Test` reports the resource is not in the desired state. Values are 'none', 'test' and 'set'. Setting the value to 'none' (the default) means the resource simply follows the run's overall mode, with no special treatment.
@@ -157,17 +311,57 @@ The pipeline runner provides a set of features applicable to all Desired State C
 
     ```yaml
     - name: Default Git Configuration Permissions
-      type: AzureDevOpsDsc/AzDoGitPermission
+      type: AzureDevOpsDscNative/AzDoGitPermission
       executionMethodOverride: test
       # Even if this run's ConfigurationMode is 'Enforce', this resource will only ever be tested, never set.
     ```
 
     ```yaml
     - name: Default Git Configuration Permissions
-      type: AzureDevOpsDsc/AzDoGitPermission
+      type: AzureDevOpsDscNative/AzDoGitPermission
       executionMethodOverride: set
       # Even if this run's ConfigurationMode is 'Audit', this resource will still be applied if it drifts.
     ```
+
+- __Stub (partial) resources__ (`merge_with`): a resource declared with `merge_with` merges its
+  `properties` into another resource in the same compiled file, named by that resource's full
+  `Module/ResourceName/Instance` identity. The target declares itself as a stub target with
+  `mergable: true`. The merge is additive: a stub adds keys the target does not set, and the
+  target's own value wins when both set the same key.
+
+    __Example:__
+
+    ```yaml
+    # ProjectPolicies/ProjectGroups.yml
+    - name: CON Readers
+      type: AzureDevOpsDscNative/AzDoProjectGroup
+      mergable: true
+      properties:
+        ProjectName: $(variables('ProjectName'))
+        GroupName: $(variables('ProjectGroups_Role_CONReaders'))
+
+    # Projects/Present/Magenta.yml
+    - name: Magenta Readers Group
+      type: AzureDevOpsDscNative/AzDoProjectGroup
+      merge_with: AzureDevOpsDscNative/AzDoProjectGroup/CON Readers
+      properties:
+        Ensure: Present
+    ```
+
+- __Composite resources__ (`type: composite/<Name>`): a resource whose type is `composite/<Name>`
+  is replaced by the resources declared in `CompositeResources/<Name>.yml` in the configuration
+  directory, before dependency ordering. A composite shares the run's `parameters`/`variables`
+  scope; the composite node's own `properties` are not passed in.
+
+    __Example:__
+
+    ```yaml
+    # Projects/Present/Magenta.yml - expands into the resources in CompositeResources/ConfigurationRepository.yml
+    - name: Configuration Repository
+      type: composite/ConfigurationRepository
+    ```
+
+    See the [Composite and Stub Resources](https://github.com/Akkodis-Solution-Engineering/DSC.PipelineRunner.Akkodis/wiki/Composite-and-Stub-Resources) wiki page.
 
 These features collectively enhance the robustness and adaptability of DSC resources managed by the pipeline runner, allowing for more precise and context-sensitive configuration management.
 
@@ -175,41 +369,71 @@ These features collectively enhance the robustness and adaptability of DSC resou
 
 In the realm of configuration, there are specialized commands designed to modify the pipeline runner execution process. These commands provide greater control over how configurations are applied and managed. The key commands include:
 
-- _Stop-TaskProcessing_: This command halts the processing of tasks. When executed, any resources scheduled to run after this command will be bypassed, effectively skipping their execution. This can be useful for scenarios where you need to prevent certain operations from taking place without altering the entire configuration. For Example:
+- _Stop-TaskProcessing_: This command halts the processing of tasks. When executed, any resources scheduled to run after this command will be bypassed, effectively skipping their execution. This is useful for scenarios where you need to prevent certain operations from taking place without altering the entire configuration. For Example:
 
     ```yaml
     - name: Project
-        type: AzureDevOpsDsc/AzDoProject
-        postExecutionScript: if ($Project_Ensure -eq 'Absent') { Stop-TaskProcessing }
+      type: AzureDevOpsDscNative/AzDoProject
+      postExecutionScript: if ($Project_Ensure -eq 'Absent') { Stop-TaskProcessing }
     ```
 
     In this scenario, when the project is set for deletion, it will remove the project and subsequently halt any further tasks from executing within the pipeline.
 
+- _stopProcessing()_: the `postCondition`-only counterpart of `Stop-TaskProcessing`. It sets
+  the same run-control flag, so the remaining resources in the file are skipped, but it is
+  reachable from a `postCondition` expression (which cannot call arbitrary commands) rather
+  than only from `preExecutionScript`/`postExecutionScript`:
+
+    ```yaml
+    - name: Print Spooler
+      type: PSDscResources/Service
+      postCondition: result().InDesiredState -or stopProcessing()
+    ```
+
 ### Deep Dive: Configuration Merging and Executing Process
 
 1. Datum merges the example configuration based on the resolution precedence.
-1. Once the YAML file for the project has been generated, Datum will execute any `[x={ $Node.ProjectPresence }=]` script blocks within the `_variables` property.
+1. Once the YAML file for the project has been generated, Datum will execute any `[x={ $Node.ProjectPresence }=]` script blocks within the `variables` property.
 1. The pipeline runner ingests the configuration, loading and interpolating all variables and parameters into memory.
-1. The pipeline runner runs the `Pre-Parse` and `Format` rules.
-1. The `Resources` are ordered according to the `dependsOn` property.
-1. The pipeline runner iterates through each of the Resources and performs the following steps:
-    1. Checks if `Stop-TaskProcessing` has been executed; if so, the resource will be skipped.
-    1. Checks for the `condition` property and executes the statement. The resource will execute on a `$true` response.
-    1. Iterates through all the properties within the resource and executes any calculated properties. This includes variables such as:
+1. Stub resources are merged into their `merge_with` targets, and composite resources are replaced by the resources of the files they link to.
+1. Each resource's `notify` property is expanded into an implicit `dependsOn` entry on every
+   resource it names, so the notifying resource is guaranteed to run first.
+1. The `Resources` are ordered according to the `dependsOn` property (including the implicit
+   entries `notify` just added).
+1. The runner executes the `Pre-Parse` and `Format` rules.
+1. The runner iterates through each of the Resources and performs the following steps:
+    1. Checks if `Stop-TaskProcessing`/`stopProcessing()` has been called; if so, the resource will be skipped.
+    1. Checks for the `preCondition` property (the `condition` key still works, as a
+       deprecated alias) and evaluates the expression. The resource executes when it is
+       `$true`; a `$false` result skips the resource.
+    1. Resolves the resource's properties in two passes. The first pass substitutes whole-value
+       parameter tokens (`<params=Name>`), which keeps the parameter's type intact; the second
+       pass interpolates variables and evaluates any calculated properties:
 
-    ```yaml
-    Ensure: $( if ([string]::IsNullOrEmpty($Project_Ensure)) { 'Present' } else { $Project_Ensure } )
-    ```
+       ```yaml
+       ServiceName: <params=ServiceName>
+       Ensure: $( if ([string]::IsNullOrEmpty((variables 'Project_Ensure'))) { 'Present' } else { variables 'Project_Ensure' } )
+       ```
 
-    1. Executes the resource.
-    1. Upon completion (even in case of an error), the pipeline runner checks for the `postExecutionScript` property and invokes the code if present.
-
-    ``` YAML
-    Ensure: $( if ([string]::IsNullOrEmpty($Project_Ensure)) { 'Present' } else { $Project_Ensure } )
-    ```
-
-    1. The resource is executed.
-    1. Once completed (_even on error_). The pipeline runner will check for the `postExecutionScript` property. It will invoke the code.
+    1. Resolves the resource's execution `target` (a per-resource override, falling back to
+       `PipelineRunnerSettings.Target`, default `Local`) and its `resourceCredential`, if any,
+       through the `Target`/`Credential` action hooks.
+    1. If present, runs `preExecutionScript` before the engine call (gated by
+       `AllowExecutionScripts`).
+    1. Runs the engine's `Test` method. If the resource is already in the desired state **and**
+       it was not forced to refresh by a `notify`, it is marked `OK` and Set is skipped.
+       Otherwise, in `Enforce`/`ApplyOnly` mode (or with `executionMethodOverride: set`) it runs
+       the engine's `Set` method; in `Audit` mode (or with `executionMethodOverride: test`),
+       drift marks the resource `FAIL` instead. Under `Enforce`, a resource that was set is
+       re-tested to verify the change landed. `Invoke-DscResource` drives `DscV2` (the default),
+       `dsc.exe` drives `DscV3`.
+    1. If `Set` reports `RebootRequired`: a remote target is restarted and the run continues
+       once it is back; a local target fails the resource and stops the rest of the file, unless
+       `PipelineRunnerSettings.Reboot: Ignore` is set.
+    1. Checks for the `postCondition` property and evaluates it; a `$false` result marks the
+       resource `FAIL` regardless of the engine's own outcome.
+    1. Upon completion (even in case of an error), the runner checks for the `postExecutionScript` property and invokes the code if present.
+    1. The runner calls the engine's `Get` method on the resource and stores the result in a references table, making it available to subsequent resources via the `reference` function, and to any resource this one notifies via the `using()` function.
 
 ## Getting Started
 
@@ -362,7 +586,7 @@ In the realm of configuration, there are specialized commands designed to modify
 
     By following these steps, you will ensure that your Agent Pool is fully prepared with all necessary PowerShell dependencies, facilitating seamless operation of your Azure DevOps pipelines.
 
-    > Please Note: Maintaining the correct versioning is crucial to prevent pipeline runner compilation errors. Before proceeding with any updates, always verify that the PipelineRunnerVersionSettings within Datum.yml are compatible. The pipeline runner will reject any configuration that does not meet the specified versioning criteria.
+    > Please Note: Maintaining the correct versioning is crucial to prevent pipeline runner compilation errors. Before proceeding with any updates, always verify that the `PipelineRunnerSettings` versions within Datum.yml are compatible. The pipeline runner will reject any configuration that does not meet the specified versioning criteria.
 
 1. __Setup the Azure DevOps Pipeline:__
 
@@ -405,7 +629,7 @@ In the realm of configuration, there are specialized commands designed to modify
       steps:
 
         - pwsh: |
-            Import-Module DSC.PipelineRunner.Akkodis, AzureDevOpsDsc;
+            Import-Module DSC.PipelineRunner.Akkodis, AzureDevOpsDscNative;
             Write-Host "Source: $(build.sourcesDirectory)"
             Write-Host "Method: $(PipelineRunnerMethod)"
 
@@ -425,7 +649,7 @@ In the realm of configuration, there are specialized commands designed to modify
 
     __Template 2 - Updated__:
 
-    The classic template utilizes the internal datum configuration to derive the ConfigurationMode:
+    The updated template omits `-ConfigurationMode`, so the runner derives it from `PipelineConfigurationMode` in Datum.yml (for example `Scheduled` with `ChangeWindows`):
 
     ``` YAML
       # Starter pipeline
@@ -448,9 +672,8 @@ In the realm of configuration, there are specialized commands designed to modify
       steps:
 
         - pwsh: |
-            Import-Module DSC.PipelineRunner.Akkodis, AzureDevOpsDsc;
+            Import-Module DSC.PipelineRunner.Akkodis, AzureDevOpsDscNative;
             Write-Host "Source: $(build.sourcesDirectory)"
-            Write-Host "Method: $(PipelineRunnerMethod)"
 
             $params = @{
               AzureDevopsOrganizationName = 'AzDoManagmentOrg'
@@ -478,7 +701,7 @@ In the realm of configuration, there are specialized commands designed to modify
 
 The pipeline runner's execution engine (Datum compilation, configuration validation, resource invocation) does not depend on Azure DevOps in any way — it invokes whatever DSC resource module the compiled configuration's `type:` fields reference. `Invoke-DscPipelineRunner` is a thin, Azure-DevOps-flavored wrapper around this engine: it authenticates to Azure DevOps and then delegates everything else to `Invoke-DscRunner`.
 
-If your configuration targets a different (or no) authenticated backend, call `Invoke-DscRunner` directly. It requires no `AzureDevOpsDsc` or `AzureDevOpsDsc.Common` install, needs no `AZDODSC_CACHE_DIRECTORY` environment variable (that's only read by the `AzureDevOpsDsc` resources themselves), and performs no authentication of its own — authenticate to whatever your configuration's resources require using that module's own mechanism before calling it.
+If your configuration targets a different (or no) authenticated backend, call `Invoke-DscRunner` directly. It requires no `AzureDevOpsDscNative` or `AzureDevOpsDsc.Common` install, needs no `AZDODSC_CACHE_DIRECTORY` environment variable (that's only read by the `AzureDevOpsDscNative` resources themselves), and performs no authentication of its own — authenticate to whatever your configuration's resources require using that module's own mechanism before calling it.
 
 ```powershell
 Import-Module DSC.PipelineRunner.Akkodis

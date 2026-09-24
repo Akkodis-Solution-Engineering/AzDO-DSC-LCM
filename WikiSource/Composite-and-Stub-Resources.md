@@ -24,22 +24,25 @@ A stub resource is declared with `merge_with` instead of a normal resource body.
 `properties` and `merge_with` are read from it.
 
 ```yaml
+# ProjectPolicies/ProjectGroups.yml
 resources:
 
-  - name: Project
-    type: AzureDevOpsDscNative/AzDoProject
+  - name: CON Readers
+    type: AzureDevOpsDscNative/AzDoProjectGroup
     mergable: true
     properties:
-      projectName: Magenta
-      visibility: private
+      ProjectName: $(variables('ProjectName'))
+      GroupName: $(variables('ProjectGroups_Role_CONReaders'))
 
-  # Declared at a more specific Datum layer (e.g. a node file), merged into the
-  # 'Project' resource above at compile-evaluation time.
-  - name: Project Visibility Override
-    type: AzureDevOpsDscNative/AzDoProject
-    merge_with: AzureDevOpsDscNative/AzDoProject/Project
+# Projects/Present/Magenta.yml - a more specific Datum layer. After Datum's merge both entries
+# sit in the same compiled file, and the stub is folded into 'CON Readers' at evaluation time.
+resources:
+
+  - name: Magenta Readers Group
+    type: AzureDevOpsDscNative/AzDoProjectGroup
+    merge_with: AzureDevOpsDscNative/AzDoProjectGroup/CON Readers
     properties:
-      visibility: public
+      Ensure: Present
 ```
 
 `merge_with` names the **target's full identity** — `Module/ResourceName/Instance`, the same
@@ -58,35 +61,32 @@ evaluation time rather than at Datum's own merge time.
 
 ### The merge itself
 
-`Merge-StubResources` groups every stub by its `merge_with` value, locates the one resource in
-the file whose `Module/ResourceName/Instance` identity matches, and merges each stub's
-`properties` onto the target's `properties` with `Join-Properties` — later stubs win over
-earlier ones for a given property.
+`Merge-StubResources` groups every stub by its `merge_with` value, locates the resource in the
+same compiled file whose `Module/ResourceName/Instance` identity matches, and merges each stub's
+`properties` onto the target's `properties` with `Join-Properties`. The stub itself is then
+dropped from the resource list.
 
-Two things are enforced, both as hard failures:
+The merge is **additive**:
 
-- **The target must exist in the same compiled file.** A `merge_with` naming a resource that is
-  not present — including one that exists only in a different compiled file — fails the run.
-  Stub merging is intra-file, exactly like `dependsOn`, `notify` and `using()`.
-- **The target must opt in with `mergable: true`.** A stub whose target does not carry
-  `mergable: true` is rejected:
+- A key the target does not set is added from the stub.
+- A key both set keeps the **target's** value — a stub cannot override a property the target
+  already declares. To change an existing value, override the target itself at a more specific
+  Datum layer using the same `name` (see above).
+- Merging array-of-hashtable properties (for example an `AzDoGitPermission` `Permissions`
+  list) is currently broken: `Join-Properties` calls a `Sort-Hashtable` helper that does not
+  exist, and the merged array comes back empty. Do not point a stub at an array property until
+  that is fixed.
 
-  ```
-  [DSCStub] Error: Resource 'AzureDevOpsDscNative/AzDoProject/Project' does not contain a
-  'mergable' property.
-  ```
+What is and is not enforced today:
 
-  This is deliberate: a resource author has to explicitly declare that being merged into is
-  safe, rather than any resource in the configuration silently becoming a merge target.
-
-A `merge_with` naming a resource that genuinely does not exist anywhere in the file throws too:
-
-```
-[DSCStub] Error: Resource 'AzureDevOpsDscNative/AzDoProject/Project' not found in provided DSC resources.
-```
-
-and a `merge_with` value that matches more than one resource — which should not be possible
-given `name` uniqueness, but is guarded anyway — throws naming the count.
+- **A missing target is a warning, not a failure.** A `merge_with` naming a resource that is not
+  in the same compiled file writes
+  `[Merge-StubResources] Resource not found: <merge_with>` and the stub is discarded. Stub
+  merging is intra-file, exactly like `dependsOn`, `notify` and `using()`.
+- **`mergable: true` is not currently checked.** Mark every intended target with
+  `mergable: true` anyway — it documents intent, and the `[DSCStub]` class carries a `merge()`
+  method that rejects unmarked targets, but `Merge-StubResources` performs its own merge and
+  does not call it.
 
 ## Composite resources
 
@@ -96,38 +96,37 @@ ordinary resource, a composite node contributes **no directly-executable DSC res
 own** — the whole point is that it stands in for the composite file's own `resources:` list.
 
 ```yaml
+# Projects/Present/Magenta.yml
 resources:
 
-  - name: Web Tier
-    type: composite/WebTier
-    properties:
-      SiteName: Contoso
+  - name: Configuration Repository
+    type: composite/ConfigurationRepository
 ```
 
-`WebTier.yml`, resolved relative to the composite directory:
+`CompositeResources/ConfigurationRepository.yml`, resolved from the `CompositeResources`
+directory at the configuration root:
 
 ```yaml
-parameters:
-  SiteName: {}
+parameters: {}
 
-variables:
-  DeployRoot: C:\inetpub
+variables: {}
 
 resources:
 
-  - name: Site Directory
-    type: PSDscResources/File
+  - name: Configuration Git Repository
+    type: AzureDevOpsDscNative/AzDoGitRepository
+    dependsOn:
+      - AzureDevOpsDscNative/AzDoProject/Project
     properties:
-      DestinationPath: $(concat (variables 'DeployRoot') '\' (parameters 'SiteName'))
-      Type: Directory
-      Ensure: Present
-
-  - name: Web Feature
-    type: PSDscResources/WindowsFeature
-    properties:
-      Name: Web-Server
+      ProjectName: $(variables('ProjectName'))
+      RepositoryName: $(variables('ProjectRepositoryName'))
       Ensure: Present
 ```
+
+`ProjectName` and `ProjectRepositoryName` are not declared in the composite. They resolve
+because the composite shares the run's variable scope, and the node file that references it
+(together with `ProjectPolicies/Project.yml`) declares them. A `properties:` block on the
+composite node is **not** passed into the composite — it is ignored.
 
 ### What actually happens
 
@@ -137,7 +136,7 @@ fast, before any expansion, if the file is missing:
 
 ```
 [DSCCompositeResource] Error. The composite resource cannot be found. Please check that the
-file is named correctly and try again. FilePath: <path>\WebTier.yml
+file is named correctly and try again. FilePath: <path>/CompositeResources/ConfigurationRepository.yml
 ```
 
 `Expand-CompositeResources` then walks the resource list and, for every composite node it finds,
@@ -156,15 +155,15 @@ calls resolve normally.
 
 The consequence is that **composites do not get their own isolated scope**. Two composites (or a
 composite and the file that references it) that declare a parameter or variable of the same name
-will clobber each other — whichever is expanded last wins. Parameterize a composite through its
-own resource's `properties` block (read inside the composite via `$(parameters(...))` once the
-composite's own `parameters:` block names them) rather than relying on name collisions not
-happening.
+will clobber each other — whichever is expanded last wins. Because the composite node's own
+`properties` are not passed in, parameterize a composite through variables or parameters
+declared by the file that references it, and give composite-level defaults names that will not
+collide.
 
 ### Where composites fit in the pipeline
 
 ```
-Merge-StubResources        → composites cannot be stub targets or stubs themselves
+Merge-StubResources        → runs first, so a stub cannot target a composite's inner resources
 Expand-CompositeResources  → runs after stubs, before dependency ordering
 Expand-NotifyDependsOn
 Sort-DependsOn

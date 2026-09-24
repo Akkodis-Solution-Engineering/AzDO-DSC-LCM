@@ -23,6 +23,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `Test-DatumConfiguration` called `.ContainsKey()` on the `PipelineConfigurationMode` block,
+  but Datum returns an `OrderedDictionary`, which has no such method, so every real Datum.yml
+  failed validation. It now uses `.Contains()`.
+- `Test-DatumConfiguration` checked the installed `DSC.PipelineRunner.Akkodis` version against the
+  `DSCResource*` bounds (1.0-1.9), which rejects every 0.x release. It now uses
+  `PipelineRunnerMinimumVersion`/`PipelineRunnerMaximumVersion`, and the minimum was lowered to
+  `0.0.1`.
+- `Invoke-DscRunner` looked for `datum.yml`; the file is `Datum.yml`, and the lookup is
+  case-sensitive on Linux.
+- Integration suites no longer leak process environment variables into later suites, and
+  `upload-artifact` was bumped to v4.
+- Integration test fixtures used a `PipelineRunnerVersionSettings` block that the runner never
+  reads; they now use `PipelineRunnerSettings`.
+- `Example Configuration`, the README and the wiki now follow the upstream Dsc.PipelineRunner
+  naming: the `AzureDevOpsDscNative` resource module, `PipelineRunnerSettings`,
+  `$(variables('Name'))` accessors and `preCondition`. The example adds a working composite
+  resource (`CompositeResources/ConfigurationRepository.yml`) and stub resource. The README's
+  `ChangeWindows` example was not valid YAML and has been fixed. The Composite and Stub
+  Resources wiki page now describes how stub merging actually behaves: the merge is additive, a
+  missing target only warns, and `mergable` is not enforced.
 - Issues with Build script running on 'ubuntu-latest'. Issues with pwsh core handling classes.
 - Fixed Bugs within the Symantec Versioning script. Wasn't detecting tag versions.
 - The module manifest listed all seven public commands under `CmdletsToExport` instead of

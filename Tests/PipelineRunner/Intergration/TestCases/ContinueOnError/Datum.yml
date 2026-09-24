@@ -10,7 +10,7 @@ PipelineConfigurationMode:
   ConfigurationMode: Enforce
   ChangeWindows: []
 
-PipelineRunnerVersionSettings:
+PipelineRunnerSettings:
   ConfigurationVersion: 0.1
   PipelineRunnerVersion: 0.2
   DSCResourceVersion: 2.0

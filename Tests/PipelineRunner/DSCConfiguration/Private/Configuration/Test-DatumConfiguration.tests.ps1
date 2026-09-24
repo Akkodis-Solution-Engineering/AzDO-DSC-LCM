@@ -196,6 +196,100 @@ Describe "Test-DatumConfiguration Function Tests" -Tag Unit, PipelineRunner, Con
 
     }
 
+    Context "When testing the DSC.PipelineRunner.Akkodis version bounds" {
+
+        BeforeAll {
+            $script:RunnerDatum = @{
+                '__Definition' = @{
+                    PipelineConfigurationMode = @{
+                        ConfigurationMode = 'Audit'
+                        ChangeWindows = @()
+                    }
+                    PipelineRunnerSettings = @{
+                        ConfigurationVersion = "0.5"
+                        PipelineRunnerVersion = "0.0.5"
+                    }
+                }
+            }
+        }
+
+        It "should check the installed runner against PipelineRunner*, not DSCResource*, bounds" {
+            Mock -CommandName Get-Module -MockWith {
+                param($name)
+                switch ($name) {
+                    'PSDesiredStateConfiguration' { @{ Version = [version]"2.0.0" } }
+                    'DSC.PipelineRunner.Akkodis' { @{ Version = [version]"0.0.5" } }
+                    default { $null }
+                }
+            }
+
+            # 0.0.5 is below the DSCResource bounds but inside the PipelineRunner bounds.
+            $ModuleConfigurationData = @{
+                YAMLConfigurationMinimumVersion           = "0.1"
+                YAMLConfigurationMaximumVersion           = "0.9"
+                PSDesiredStateConfigurationMinimumVersion = "2.0"
+                PSDesiredStateConfigurationMaximumVersion = "2.9"
+                DSCResourceMinimumVersion                 = "1.0"
+                DSCResourceMaximumVersion                 = "1.9"
+                PipelineRunnerMinimumVersion              = "0.0.1"
+                PipelineRunnerMaximumVersion              = "1.9"
+            }
+
+            { Test-DatumConfiguration -Datum $script:RunnerDatum } | Should -Not -Throw
+        }
+
+        It "should throw when the installed runner is below PipelineRunnerMinimumVersion" {
+            Mock -CommandName Get-Module -MockWith {
+                param($name)
+                switch ($name) {
+                    'PSDesiredStateConfiguration' { @{ Version = [version]"2.0.0" } }
+                    'DSC.PipelineRunner.Akkodis' { @{ Version = [version]"0.0.5" } }
+                    default { $null }
+                }
+            }
+
+            $ModuleConfigurationData = @{
+                YAMLConfigurationMinimumVersion           = "0.1"
+                YAMLConfigurationMaximumVersion           = "0.9"
+                PSDesiredStateConfigurationMinimumVersion = "2.0"
+                PSDesiredStateConfigurationMaximumVersion = "2.9"
+                DSCResourceMinimumVersion                 = "0.0.1"
+                DSCResourceMaximumVersion                 = "1.9"
+                PipelineRunnerMinimumVersion              = "0.1"
+                PipelineRunnerMaximumVersion              = "1.9"
+            }
+
+            { Test-DatumConfiguration -Datum $script:RunnerDatum } | Should -Throw -ExpectedMessage "*DSC.PipelineRunner.Akkodis Version 0.0.5 is outside the valid range*"
+        }
+
+        It "should accept the shipped Example Configuration with the shipped bounds and manifest version" {
+            # The repository's Example Configuration is the reference configuration, so it must
+            # pass validation against the bounds and module version that actually ship.
+            . (Get-FunctionPath 'VersionConfiguration.ps1').FullName
+            $shippedBounds = $ModuleConfigurationData
+
+            $manifestPath = Join-Path $Global:RepositoryRoot 'source/DSC.PipelineRunner.Akkodis.psd1'
+            $script:ManifestVersion = [version](Import-PowerShellDataFile -LiteralPath $manifestPath).ModuleVersion
+
+            Mock -CommandName Get-Module -MockWith {
+                param($name)
+                switch ($name) {
+                    'PSDesiredStateConfiguration' { @{ Version = [version]"2.0.0" } }
+                    'DSC.PipelineRunner.Akkodis' { @{ Version = $script:ManifestVersion } }
+                    default { $null }
+                }
+            }
+
+            $exampleDatumPath = Join-Path $Global:RepositoryRoot 'Example Configuration/Datum.yml'
+            $exampleDefinition = ConvertFrom-Yaml -Yaml (Get-Content -LiteralPath $exampleDatumPath -Raw)
+            $datumConfig = @{ '__Definition' = $exampleDefinition }
+
+            $ModuleConfigurationData = $shippedBounds
+
+            { Test-DatumConfiguration -Datum $datumConfig } | Should -Not -Throw
+        }
+    }
+
     Context "When testing PipelineConfigurationMode" {
 
         BeforeAll {
@@ -430,6 +524,31 @@ Describe "Test-DatumConfiguration Function Tests" -Tag Unit, PipelineRunner, Con
 
             { Test-DatumConfiguration -Datum $datumConfig } | Should -Not -Throw
             Assert-MockCalled Write-Warning -Exactly 0
+        }
+
+        it "should accept ordered dictionaries, which is what Datum returns for Datum.yml" {
+            # OrderedDictionary has no ContainsKey(); every other test here uses plain hashtables,
+            # which is how a ContainsKey() call once passed unit tests and failed every real run.
+            $datumConfig = @{
+                '__Definition' = [ordered]@{
+                    PipelineConfigurationMode = [ordered]@{
+                        ConfigurationMode = 'Scheduled'
+                        ChangeWindows = @(
+                            [ordered]@{
+                                StartTime         = "20:00"
+                                EndTime           = "23:59"
+                                ConfigurationMode = 'Audit'
+                            }
+                        )
+                    }
+                    PipelineRunnerSettings = [ordered]@{
+                        ConfigurationVersion = "1.0.0"
+                        PipelineRunnerVersion = "1.0.0"
+                    }
+                }
+            }
+
+            { Test-DatumConfiguration -Datum $datumConfig } | Should -Not -Throw
         }
 
     }

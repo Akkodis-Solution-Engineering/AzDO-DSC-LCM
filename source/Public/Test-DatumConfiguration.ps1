@@ -43,7 +43,7 @@ function Test-DatumConfiguration {
     }
 
     # Validate that the PipelineConfigurationMode contains the required properties.
-    if (-not $Datum.__Definition.PipelineConfigurationMode.ContainsKey('ConfigurationMode')) {
+    if (-not $Datum.__Definition.PipelineConfigurationMode.Contains('ConfigurationMode')) {
         throw "[Test-DatumConfiguration] The Datum Configuration PipelineConfigurationMode does not contain the ConfigurationMode property. The Datum Configuration is invalid and cannot be processed."
     }
 
@@ -53,13 +53,13 @@ function Test-DatumConfiguration {
     }
 
     # Validate that the ConfigurationMode is one of the allowed values.
-    if (-not $Datum.__Definition.PipelineConfigurationMode.ContainsKey('ChangeWindows')) {
+    if (-not $Datum.__Definition.PipelineConfigurationMode.Contains('ChangeWindows')) {
         throw "[Test-DatumConfiguration] The Datum Configuration PipelineConfigurationMode does not contain the ChangeWindows property. The Datum Configuration is invalid and cannot be processed."
     }
 
     # Validate the properties of the ChangeWindows array.
     ForEach ($ChangeWindow in $Datum.__Definition.PipelineConfigurationMode.ChangeWindows) {
-        if (-not $ChangeWindow.ContainsKey('StartTime') -or -not $ChangeWindow.ContainsKey('EndTime') -or -not $ChangeWindow.ContainsKey('ConfigurationMode')) {
+        if (-not $ChangeWindow.Contains('StartTime') -or -not $ChangeWindow.Contains('EndTime') -or -not $ChangeWindow.Contains('ConfigurationMode')) {
             throw "[Test-DatumConfiguration] Each ChangeWindow in the Datum Configuration PipelineConfigurationMode must contain StartTime, EndTime, and ConfigurationMode properties. The Datum Configuration is invalid and cannot be processed."
         }
         # Permitted values for ConfigurationMode in ChangeWindows are: ApplyOnly, Audit, Enforce
@@ -174,8 +174,10 @@ function Test-DatumConfiguration {
     # neither of which was ever populated, so it was a permanent no-op ($x -lt $null is
     # always $false). Use the real installed version and the configured bounds, and warn
     # (rather than silently pass) when a bound cannot be determined.
-    $PipelineRunnerMinimumVersion = $ModuleConfigurationData.DSCResourceMinimumVersion -as [Version]
-    $PipelineRunnerMaximumVersion = $ModuleConfigurationData.DSCResourceMaximumVersion -as [Version]
+    # These are this module's own bounds (PipelineRunner*), not DSCResource*, which describe
+    # the DSC resource versions and would reject every 0.x release of this module.
+    $PipelineRunnerMinimumVersion = $ModuleConfigurationData.PipelineRunnerMinimumVersion -as [Version]
+    $PipelineRunnerMaximumVersion = $ModuleConfigurationData.PipelineRunnerMaximumVersion -as [Version]
 
     if (($null -eq $PipelineRunnerMinimumVersion) -or ($null -eq $PipelineRunnerMaximumVersion)) {
         Write-Warning "[Test-DatumConfiguration] The DSC.PipelineRunner.Akkodis minimum/maximum version bounds are not configured; skipping the DSC.PipelineRunner.Akkodis version check."

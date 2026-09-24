@@ -13,7 +13,7 @@ Data ModuleConfigurationData {
         DSCResourceMinimumVersion = '1.0'
         DSCResourceMaximumVersion = '1.9'
         # Define the minimum and maximum versions for the DSC.PipelineRunner.Akkodis module itself.
-        PipelineRunnerMinimumVersion = '0.1'
+        PipelineRunnerMinimumVersion = '0.0.1'
         PipelineRunnerMaximumVersion = '1.9'
     }
 

@@ -129,36 +129,84 @@ Describe "Test-DatumConfiguration Function Tests" -Tag Unit, PipelineRunner, Con
             Assert-MockCalled Write-Warning -Exactly 0
         }
 
-        It "should issue a warning if two or more minor versions behind" {
+        It "should issue a warning if two or more minor versions behind YAMLConfigurationCurrentVersion" {
 
             $datumConfig = @{
                 '__Definition' = @{
-                    PipelineConfigurationMode = @{
-                        ConfigurationMode = 'Audit'
-                        ChangeWindows = @()
-                    }                    
+                    PipelineConfigurationMode = @{ ConfigurationMode = 'Audit' }
                     PipelineRunnerSettings = @{
-                        ConfigurationVersion = "1.8.0"
+                        ConfigurationVersion = "0.3"
                         PipelineRunnerVersion = "1.0.0"
-                        DSCResourceVersion = "1.0.0"
                     }
                 }
             }
 
             $ModuleConfigurationData = @{
-                YAMLConfigurationMinimumVersion           = "0.9.0"
-                YAMLConfigurationMaximumVersion           = "2.0.0"
+                YAMLConfigurationMinimumVersion           = "0.1"
+                YAMLConfigurationMaximumVersion           = "0.9"
+                YAMLConfigurationCurrentVersion           = "0.5"
                 PSDesiredStateConfigurationMinimumVersion = "1.0.0"
                 PSDesiredStateConfigurationMaximumVersion = "2.0.0"
-                DSCResourceMinimumVersion                 = "1.0.0"
-                DSCResourceMaximumVersion                 = "2.0.0"
-                PipelineRunnerMinimumVersion                     = "0.1.0"
-                PipelineRunnerMaximumVersion                     = "1.9.0"
+                PipelineRunnerMinimumVersion              = "0.1.0"
+                PipelineRunnerMaximumVersion              = "1.9.0"
             }
 
             Test-DatumConfiguration -Datum $datumConfig
-            Assert-MockCalled Write-Warning -Exactly 1
+            Assert-MockCalled Write-Warning -Exactly 1 -ParameterFilter { $Message -like '*two or more minor versions behind*' }
 
+        }
+
+        It "should not warn when the configuration is at or one behind YAMLConfigurationCurrentVersion" -TestCases @(
+            @{ Version = '0.5' }, @{ Version = '0.4' }, @{ Version = '0.9' }
+        ) {
+            param($Version)
+
+            $datumConfig = @{
+                '__Definition' = @{
+                    PipelineConfigurationMode = @{ ConfigurationMode = 'Audit' }
+                    PipelineRunnerSettings = @{
+                        ConfigurationVersion = $Version
+                        PipelineRunnerVersion = "1.0.0"
+                    }
+                }
+            }
+
+            $ModuleConfigurationData = @{
+                YAMLConfigurationMinimumVersion           = "0.1"
+                YAMLConfigurationMaximumVersion           = "0.9"
+                YAMLConfigurationCurrentVersion           = "0.5"
+                PSDesiredStateConfigurationMinimumVersion = "1.0.0"
+                PSDesiredStateConfigurationMaximumVersion = "2.0.0"
+                PipelineRunnerMinimumVersion              = "0.1.0"
+                PipelineRunnerMaximumVersion              = "1.9.0"
+            }
+
+            Test-DatumConfiguration -Datum $datumConfig
+            Assert-MockCalled Write-Warning -Exactly 0
+        }
+
+        It "should reject 0.10 when the maximum is 0.9 (versions are not compared as decimals)" {
+
+            $datumConfig = @{
+                '__Definition' = @{
+                    PipelineConfigurationMode = @{ ConfigurationMode = 'Audit' }
+                    PipelineRunnerSettings = @{
+                        ConfigurationVersion = "0.10"
+                        PipelineRunnerVersion = "1.0.0"
+                    }
+                }
+            }
+
+            $ModuleConfigurationData = @{
+                YAMLConfigurationMinimumVersion           = "0.1"
+                YAMLConfigurationMaximumVersion           = "0.9"
+                PSDesiredStateConfigurationMinimumVersion = "1.0.0"
+                PSDesiredStateConfigurationMaximumVersion = "2.0.0"
+                PipelineRunnerMinimumVersion              = "0.1.0"
+                PipelineRunnerMaximumVersion              = "1.9.0"
+            }
+
+            { Test-DatumConfiguration -Datum $datumConfig } | Should -Throw "*outside the valid range*"
         }
 
         it "Should throw an error if outside the valid range" {
@@ -427,6 +475,32 @@ Describe "Test-DatumConfiguration Function Tests" -Tag Unit, PipelineRunner, Con
             }
             { Test-DatumConfiguration -Datum $datumConfig } | Should -Throw "*The StartTime and EndTime properties in the ChangeWindow*"
             Assert-MockCalled Write-Warning -Exactly 0
+        }
+
+        It "should not require ChangeWindows when the ConfigurationMode is not Scheduled" {
+            $datumConfig = @{
+                '__Definition' = @{
+                    PipelineConfigurationMode = [ordered]@{ ConfigurationMode = 'Enforce' }
+                    PipelineRunnerSettings = @{
+                        ConfigurationVersion = "1.0.0"
+                        PipelineRunnerVersion = "1.0.0"
+                    }
+                }
+            }
+            { Test-DatumConfiguration -Datum $datumConfig } | Should -Not -Throw
+        }
+
+        It "should require ChangeWindows when the ConfigurationMode is Scheduled" {
+            $datumConfig = @{
+                '__Definition' = @{
+                    PipelineConfigurationMode = [ordered]@{ ConfigurationMode = 'Scheduled' }
+                    PipelineRunnerSettings = @{
+                        ConfigurationVersion = "1.0.0"
+                        PipelineRunnerVersion = "1.0.0"
+                    }
+                }
+            }
+            { Test-DatumConfiguration -Datum $datumConfig } | Should -Throw "*ChangeWindows property, which is required*"
         }
 
         It "should throw an error if ConfigurationMode property is missing" {

@@ -108,4 +108,47 @@ Describe "Join-Properties Function Tests" -Tag Unit {
         $result['Hash'].Nested.Key2 | Should -BeExactly $expected['Hash'].Nested.Key2
     }
 
+    It "Combines arrays of hashtables, keeping every unique entry" {
+        $source = @{ Permissions = @(@{ Identity = 'A'; Permission = @{ Read = 'Allow' } }) }
+        $merge = @{ Permissions = @(
+            @{ Identity = 'B'; Permission = @{ Read = 'Allow' } }
+            @{ Permission = @{ Read = 'Allow' }; Identity = 'A' }
+        ) }
+
+        $result = Join-Properties -source $source -merge $merge
+
+        @($result.Permissions).Count | Should -Be 2
+        @($result.Permissions).Identity | Should -Be @('A', 'B')
+    }
+
+    It "Combines YAML-style List[Object] collections" {
+        $source = @{ List = [System.Collections.Generic.List[Object]]@('a', 'b') }
+        $merge = @{ List = [System.Collections.Generic.List[Object]]@('b', 'c') }
+
+        $result = Join-Properties -source $source -merge $merge
+
+        @($result.List) | Should -BeExactly @('a', 'b', 'c')
+    }
+
+    It "Combines a List[Object] with an object[]" {
+        $source = @{ List = [System.Collections.Generic.List[Object]]@('a') }
+        $merge = @{ List = @('b') }
+
+        $result = Join-Properties -source $source -merge $merge
+
+        @($result.List) | Should -BeExactly @('a', 'b')
+    }
+
+    It "Takes the merge value when the source value is null" {
+        $result = Join-Properties -source @{ Key1 = $null } -merge @{ Key1 = 'Value' }
+
+        $result.Key1 | Should -Be 'Value'
+    }
+
+    It "Keeps the source value when both set a scalar" {
+        $result = Join-Properties -source @{ Key1 = 'Source' } -merge @{ Key1 = 'Merge' }
+
+        $result.Key1 | Should -Be 'Source'
+    }
+
 }

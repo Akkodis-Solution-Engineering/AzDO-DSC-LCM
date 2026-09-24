@@ -40,9 +40,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   naming: the `AzureDevOpsDscNative` resource module, `PipelineRunnerSettings`,
   `$(variables('Name'))` accessors and `preCondition`. The example adds a working composite
   resource (`CompositeResources/ConfigurationRepository.yml`) and stub resource. The README's
-  `ChangeWindows` example was not valid YAML and has been fixed. The Composite and Stub
-  Resources wiki page now describes how stub merging actually behaves: the merge is additive, a
-  missing target only warns, and `mergable` is not enforced.
+  `ChangeWindows` example was not valid YAML and has been fixed.
+- Stub resources: a stub's values now override the target's (previously the target won, so a
+  stub could only add properties). Lists are combined, without duplicates, instead of the stub's
+  list being dropped. A `merge_with` target that is missing, found more than once, or not marked
+  `mergable: true` now fails the run instead of only warning.
+- Composite resources: the `properties` of a composite node are now passed to the composite as
+  parameter values (they were ignored). Each composite gets its own parameter and variable
+  scope, applied only while its own resources run, so two composites that declare the same name
+  no longer overwrite each other or the calling file.
+- `mergeProperties` (`Join-Properties`) combined arrays incorrectly and dropped non-string list
+  items. `Sort-Hashtable` now accepts any dictionary, including Datum's `OrderedDictionary`.
+- `Test-DatumConfiguration` warned about an outdated `ConfigurationVersion` in the wrong
+  direction. It now compares major.minor versions and warns when the configuration is two or
+  more minor versions behind the current configuration version (`0.5`).
+- `Test-DatumConfiguration` required `ChangeWindows` even when `ConfigurationMode` was not
+  `Scheduled`. It is now required only for `Scheduled`.
+- Configuration variables could overwrite PowerShell automatic and preference variables (such as
+  `$ErrorActionPreference`), the runner's own module state, and existing environment variables
+  such as `PATH`. Those names are now skipped with a warning, and an environment variable the
+  runner did not create is never overwritten.
+- The `Invoke-DscPipelineRunner` integration suite now runs on Linux: `Install-Dependencies`
+  puts the mock modules and build output on `PSModulePath`, the mock `AzureDevOpsDsc.Common`
+  files are named with the casing the manifest uses, and `Get-DscResource` (which needs Windows'
+  libmi) is mocked from the mock module's class definitions. Its report assertions read a
+  `Result` column that does not exist, so several checks passed without testing anything. They
+  now read `Status` and match the one-row-per-resource report.
+- The real-`Invoke-DscResource` integration suite skips with a reason on hosts without DSC v2
+  instead of failing.
 - Issues with Build script running on 'ubuntu-latest'. Issues with pwsh core handling classes.
 - Fixed Bugs within the Symantec Versioning script. Wasn't detecting tag versions.
 - The module manifest listed all seven public commands under `CmdletsToExport` instead of

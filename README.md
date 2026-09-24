@@ -200,7 +200,11 @@ The pipeline runner provides a set of features applicable to all Desired State C
   their use. Unlike `properties`/`preCondition`/`postCondition`, these are not parsed through
   `ExpandString` or `Assert-SafeConditionExpression` — they run as plain PowerShell, with
   direct read access to the script-scope variable `Set-Variables` already created for each
-  Datum variable, so there is no need to go through the `variables()` accessor here.
+  Datum variable, so there is no need to go through the `variables()` accessor here. A
+  variable whose name matches a runner or PowerShell variable (for example `parameters` or
+  `ErrorActionPreference`) is not created as a script variable and is only readable through
+  `variables()`. Configuration variables are also exported as environment variables, but an
+  environment variable that already existed before the run (such as `PATH`) is never overwritten.
 
     __Example:__
 
@@ -326,8 +330,9 @@ The pipeline runner provides a set of features applicable to all Desired State C
 - __Stub (partial) resources__ (`merge_with`): a resource declared with `merge_with` merges its
   `properties` into another resource in the same compiled file, named by that resource's full
   `Module/ResourceName/Instance` identity. The target declares itself as a stub target with
-  `mergable: true`. The merge is additive: a stub adds keys the target does not set, and the
-  target's own value wins when both set the same key.
+  `mergable: true`; a missing, duplicated or unmarked target fails the run. The stub's values
+  override the target's (later stubs win over earlier ones), list properties are combined
+  without duplicates, and nested hashtables are merged.
 
     __Example:__
 
@@ -350,8 +355,10 @@ The pipeline runner provides a set of features applicable to all Desired State C
 
 - __Composite resources__ (`type: composite/<Name>`): a resource whose type is `composite/<Name>`
   is replaced by the resources declared in `CompositeResources/<Name>.yml` in the configuration
-  directory, before dependency ordering. A composite shares the run's `parameters`/`variables`
-  scope; the composite node's own `properties` are not passed in.
+  directory, before dependency ordering. The composite node's `properties` are passed in as the
+  composite's parameters, overriding its declared defaults. Parameters and variables a composite
+  declares apply only to its own resources; anything it does not declare resolves from the file
+  that references it.
 
     __Example:__
 
@@ -359,6 +366,20 @@ The pipeline runner provides a set of features applicable to all Desired State C
     # Projects/Present/Magenta.yml - expands into the resources in CompositeResources/ConfigurationRepository.yml
     - name: Configuration Repository
       type: composite/ConfigurationRepository
+      properties:
+        RepositoryName: $(variables('ProjectRepositoryName'))
+
+    # CompositeResources/ConfigurationRepository.yml
+    parameters:
+      RepositoryName:
+        defaultValue: Configuration
+
+    resources:
+      - name: Configuration Git Repository
+        type: AzureDevOpsDscNative/AzDoGitRepository
+        properties:
+          ProjectName: $(variables('ProjectName'))
+          RepositoryName: $(parameters('RepositoryName'))
     ```
 
     See the [Composite and Stub Resources](https://github.com/Akkodis-Solution-Engineering/DSC.PipelineRunner.Akkodis/wiki/Composite-and-Stub-Resources) wiki page.

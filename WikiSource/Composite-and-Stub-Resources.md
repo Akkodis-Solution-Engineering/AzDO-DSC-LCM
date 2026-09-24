@@ -66,27 +66,50 @@ same compiled file whose `Module/ResourceName/Instance` identity matches, and me
 `properties` onto the target's `properties` with `Join-Properties`. The stub itself is then
 dropped from the resource list.
 
-The merge is **additive**:
+How values combine (`Join-Properties`, with the stub's properties as the source):
 
-- A key the target does not set is added from the stub.
-- A key both set keeps the **target's** value — a stub cannot override a property the target
-  already declares. To change an existing value, override the target itself at a more specific
-  Datum layer using the same `name` (see above).
-- Merging array-of-hashtable properties (for example an `AzDoGitPermission` `Permissions`
-  list) is currently broken: `Join-Properties` calls a `Sort-Hashtable` helper that does not
-  exist, and the merged array comes back empty. Do not point a stub at an array property until
-  that is fixed.
+- A key only one side sets is kept.
+- A scalar both set takes the **stub's** value. Stubs are applied in declaration order, so a
+  later stub overrides an earlier one.
+- Nested hashtables are merged key by key with the same rules.
+- Lists (for example an `AzDoGitPermission` `Permissions` list) are combined, stub entries
+  first, with duplicates removed. Hashtable entries are compared regardless of key order.
 
-What is and is not enforced today:
+```yaml
+- name: Project
+  type: AzureDevOpsDscNative/AzDoProject
+  mergable: true
+  properties:
+    projectName: Magenta
+    visibility: private
 
-- **A missing target is a warning, not a failure.** A `merge_with` naming a resource that is not
-  in the same compiled file writes
-  `[Merge-StubResources] Resource not found: <merge_with>` and the stub is discarded. Stub
-  merging is intra-file, exactly like `dependsOn`, `notify` and `using()`.
-- **`mergable: true` is not currently checked.** Mark every intended target with
-  `mergable: true` anyway — it documents intent, and the `[DSCStub]` class carries a `merge()`
-  method that rejects unmarked targets, but `Merge-StubResources` performs its own merge and
-  does not call it.
+- name: Project Visibility Override
+  type: AzureDevOpsDscNative/AzDoProject
+  merge_with: AzureDevOpsDscNative/AzDoProject/Project
+  properties:
+    visibility: public      # the compiled Project resource runs with visibility: public
+```
+
+Three things are enforced, each failing the file's run before any resource is evaluated:
+
+- **The target must exist in the same compiled file.** Stub merging is intra-file, exactly like
+  `dependsOn`, `notify` and `using()`:
+
+  ```
+  [Merge-StubResources] Resource 'AzureDevOpsDscNative/AzDoProject/Project' named by merge_with was not found in this configuration file.
+  ```
+
+- **The target must be unique.** A `merge_with` identity matching more than one resource fails,
+  naming the count.
+- **The target must opt in with `mergable: true`**, so a resource author explicitly declares
+  that being merged into is safe:
+
+  ```
+  [Merge-StubResources] Resource 'AzureDevOpsDscNative/AzDoProject/Project' is not a stub target. Add 'mergable: true' to it to allow merge_with.
+  ```
+
+Stubs declared inside a composite file are merged within that file when the composite is
+expanded.
 
 ## Composite resources
 
@@ -101,13 +124,17 @@ resources:
 
   - name: Configuration Repository
     type: composite/ConfigurationRepository
+    properties:
+      RepositoryName: $(variables('ProjectRepositoryName'))
 ```
 
 `CompositeResources/ConfigurationRepository.yml`, resolved from the `CompositeResources`
 directory at the configuration root:
 
 ```yaml
-parameters: {}
+parameters:
+  RepositoryName:
+    defaultValue: Configuration
 
 variables: {}
 
@@ -119,14 +146,13 @@ resources:
       - AzureDevOpsDscNative/AzDoProject/Project
     properties:
       ProjectName: $(variables('ProjectName'))
-      RepositoryName: $(variables('ProjectRepositoryName'))
+      RepositoryName: $(parameters('RepositoryName'))
       Ensure: Present
 ```
 
-`ProjectName` and `ProjectRepositoryName` are not declared in the composite. They resolve
-because the composite shares the run's variable scope, and the node file that references it
-(together with `ProjectPolicies/Project.yml`) declares them. A `properties:` block on the
-composite node is **not** passed into the composite — it is ignored.
+`RepositoryName` comes from the composite node's `properties`, which are passed in as the
+composite's parameters and override its `defaultValue`. `ProjectName` is not declared in the
+composite, so it resolves from the file that references it.
 
 ### What actually happens
 
@@ -145,25 +171,31 @@ itself references another composite is expanded fully before `Sort-DependsOn` ev
 composite with no inner `resources:` at all is a no-op: it contributes nothing and is silently
 dropped.
 
-### Scope: shared, not isolated
+### Scope
 
-Before splicing in the inner resources, the composite's own `parameters` and `variables` blocks
-(if it declares any as file-level defaults) are folded into the run's shared `$parameters` /
-`$variables` scope — the same module-scope hashtables an ordinary top-level configuration file
-populates. This is what lets the inner resources' `$(parameters(...))` and `$(variables(...))`
-calls resolve normally.
+Every resource spliced in from a composite carries a scope layer built from that composite:
 
-The consequence is that **composites do not get their own isolated scope**. Two composites (or a
-composite and the file that references it) that declare a parameter or variable of the same name
-will clobber each other — whichever is expanded last wins. Because the composite node's own
-`properties` are not passed in, parameterize a composite through variables or parameters
-declared by the file that references it, and give composite-level defaults names that will not
-collide.
+- **Parameters**: the composite file's `parameters` defaults, overridden by the composite
+  node's `properties`. Property values are resolved in the referencing file's scope, so
+  `$(variables('ProjectRepositoryName'))` on the node reads the parent's variable.
+- **Variables**: the composite file's `variables` block.
+
+While one of those resources runs, its layers are applied over the referencing file's own
+parameters and variables (outermost composite first, so a nested composite's values win), and
+they are removed again before the next resource. As a result:
+
+- Two composites, or a composite and the file that references it, can declare the same name
+  without clobbering each other.
+- Anything a composite does not declare still resolves from the referencing file.
+- A composite's variables are also visible to its resources' `preExecutionScript` /
+  `postExecutionScript` as `$Name`, but are not exported as environment variables.
 
 ### Where composites fit in the pipeline
 
 ```
-Merge-StubResources        → runs first, so a stub cannot target a composite's inner resources
+Merge-StubResources        → runs first on the referencing file, so a stub there cannot target
+                             a composite's inner resources (stubs inside the composite file are
+                             merged when it is expanded)
 Expand-CompositeResources  → runs after stubs, before dependency ordering
 Expand-NotifyDependsOn
 Sort-DependsOn

@@ -120,9 +120,22 @@ Function Install-Dependencies {
         [string]$ModuleName
     )
 
-    # FOR WINDOWS ONLY
+    # Linux/macOS: there is no Documents module folder to copy into. Put the mock modules and
+    # the build output on PSModulePath for this process instead (Save-/Restore-ProcessEnvironment
+    # put PSModulePath back after the suite). Datum and PSDesiredStateConfiguration come from
+    # output/RequiredModules, which the build populates.
     if ($IsWindows -eq $false) {
-        throw "This function is only supported on Windows"
+        $modulePaths = @(
+            (Join-Path $Global:RepositoryRoot 'Tests/PipelineRunner/Intergration/Resources/Modules')
+            (Join-Path $Global:RepositoryRoot 'output')
+            (Join-Path $Global:RepositoryRoot 'output/RequiredModules')
+        )
+        $env:PSModulePath = (@($modulePaths) + @($env:PSModulePath)) -join [System.IO.Path]::PathSeparator
+
+        Import-Module AzureDevOpsDsc -RequiredVersion 0.0.1 -ErrorAction Stop
+
+        Write-Host "[Install-Dependencies] Dependencies added to PSModulePath"
+        return
     }
 
     # Resolve the path to the module directory
@@ -150,6 +163,73 @@ Function Install-Dependencies {
 
     Write-Host "[Install-Dependencies] Dependencies Installed"
 
+}
+
+Function Get-DscResourceFromClassDefinition {
+    <#
+    .SYNOPSIS
+    Returns a Get-DscResource-shaped object for a class-based DSC resource, read from source.
+
+    .DESCRIPTION
+    Get-DscResource needs Windows' libmi, so it throws on Linux and macOS. Integration suites
+    mock it with this instead. The resource's [DscProperty()] members (including those inherited
+    from base classes in the same files) are parsed from the .ps1/.psm1 files under -Path with
+    the PowerShell AST, without loading the module. Enum-typed properties list their enum values
+    in .Values.
+    #>
+    param (
+        [Parameter(Mandatory)]
+        [string]$Path,
+        [Parameter(Mandatory)]
+        [string]$Name
+    )
+
+    $classes = @{}
+    $enums = @{}
+    foreach ($file in Get-ChildItem -LiteralPath $Path -Recurse -File -Include *.ps1, *.psm1) {
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$null, [ref]$null)
+        foreach ($type in $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.TypeDefinitionAst] }, $true)) {
+            if ($type.IsEnum) {
+                $enums[$type.Name] = @($type.Members.Name)
+                continue
+            }
+            $classes[$type.Name] = $type
+        }
+    }
+
+    if (-not $classes.ContainsKey($Name)) {
+        return $null
+    }
+
+    $properties = [System.Collections.Generic.List[object]]::new()
+    $current = $classes[$Name]
+    while ($null -ne $current) {
+        foreach ($member in $current.Members) {
+            if ($member -isnot [System.Management.Automation.Language.PropertyMemberAst]) { continue }
+            $dscAttribute = $member.Attributes | Where-Object { $_.TypeName.Name -eq 'DscProperty' } | Select-Object -First 1
+            if ($null -eq $dscAttribute) { continue }
+            if ($properties.Name -contains $member.Name) { continue }
+
+            $flags = @($dscAttribute.NamedArguments.ArgumentName)
+            if ($flags -contains 'NotConfigurable') { continue }
+
+            $typeName = if ($member.PropertyType) { $member.PropertyType.TypeName.Name } else { 'Object' }
+            $properties.Add([pscustomobject]@{
+                Name         = $member.Name
+                PropertyType = "[$typeName]"
+                IsMandatory  = ($flags -contains 'Key') -or ($flags -contains 'Mandatory')
+                Values       = if ($enums.ContainsKey($typeName)) { $enums[$typeName] } else { @() }
+            })
+        }
+        $baseName = @($current.BaseTypes.TypeName.Name) | Select-Object -First 1
+        $current = if ($baseName -and $classes.ContainsKey($baseName)) { $classes[$baseName] } else { $null }
+    }
+
+    [pscustomobject]@{
+        Name         = $Name
+        ResourceType = $Name
+        Properties   = $properties.ToArray()
+    }
 }
 
 Function Find-Functions {
@@ -260,6 +340,32 @@ function Get-WinRMSkipReason {
     }
     catch {
         return "A WinRM listener on [$ComputerName] answered an anonymous Test-WSMan, but an authenticated one failed: $($_.Exception.Message)"
+    }
+
+    return $null
+}
+
+<#
+.SYNOPSIS
+Returns why the real DSC v2 engine (Invoke-DscResource) cannot run here, or $null when it can.
+
+.DESCRIPTION
+See Get-WinRMSkipReason for why this is a module command rather than a variable in the test file.
+
+Invoke-DscResource ships in PSDesiredStateConfiguration, but it needs Windows' libmi to run, so
+on Linux and macOS the module imports and every call then throws.
+#>
+function Get-DscV2EngineSkipReason {
+    [CmdletBinding()]
+    param()
+
+    if (-not $IsWindows) {
+        return 'Invoke-DscResource needs PowerShell DSC on Windows (libmi); this is not Windows.'
+    }
+
+    if (-not (Get-Command -Name Invoke-DscResource -ErrorAction SilentlyContinue) -and
+        -not (Get-Module -ListAvailable -Name PSDesiredStateConfiguration)) {
+        return 'PSDesiredStateConfiguration (Invoke-DscResource) is not installed.'
     }
 
     return $null
@@ -409,4 +515,4 @@ function Restore-ProcessEnvironment {
     }
 }
 
-Export-ModuleMember -Function Split-RecurivePath, Get-FunctionPath, Find-Functions, Get-ClassFilePath, Import-Enums, New-MockDirectoryPath, New-MockFilePath, Install-Dependencies, Copy-TestCasesToTempDrive, Get-ModulePath, Get-WinRMSkipReason, Get-LiveVaultSkipReason, Get-SshRemotingSkipReason, Save-ProcessEnvironment, Restore-ProcessEnvironment
+Export-ModuleMember -Function Split-RecurivePath, Get-FunctionPath, Find-Functions, Get-ClassFilePath, Import-Enums, New-MockDirectoryPath, New-MockFilePath, Install-Dependencies, Copy-TestCasesToTempDrive, Get-ModulePath, Get-WinRMSkipReason, Get-DscV2EngineSkipReason, Get-LiveVaultSkipReason, Get-SshRemotingSkipReason, Save-ProcessEnvironment, Restore-ProcessEnvironment, Get-DscResourceFromClassDefinition

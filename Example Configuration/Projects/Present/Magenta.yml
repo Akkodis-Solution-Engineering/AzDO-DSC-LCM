@@ -12,17 +12,19 @@ resources:
 
 # Composite resource (specific to DSC.PipelineRunner.Akkodis): expands into the Configuration Git
 # Repository and Configuration Git Permissions resources declared in
-# CompositeResources/ConfigurationRepository.yml.
+# CompositeResources/ConfigurationRepository.yml. Its properties are the composite's parameters.
 - name: Configuration Repository
   type: composite/ConfigurationRepository
+  properties:
+    RepositoryName: $(variables('ProjectRepositoryName'))
 
 # Stub resource (specific to DSC.PipelineRunner.Akkodis): merges its properties into the
 # ProjectPolicies/ProjectGroups.yml 'CON Readers' resource under a different name, so this
 # project's addition shows up as its own entry in the compiled YAML. merge_with takes the
-# target's full Module/ResourceName/Instance identity. The merge is additive: a stub adds keys
-# the target does not set, and the target's own value wins when both set the same key. A stub
-# cannot target a resource inside a composite, because stubs are merged before composites are
-# expanded.
+# target's full Module/ResourceName/Instance identity, and the target must declare
+# `mergable: true`. The stub's values override the target's; list properties are combined.
+# A stub cannot target a resource inside a composite, because stubs are merged before
+# composites are expanded.
 - name: Magenta Readers Group
   type: AzureDevOpsDscNative/AzDoProjectGroup
   merge_with: AzureDevOpsDscNative/AzDoProjectGroup/CON Readers

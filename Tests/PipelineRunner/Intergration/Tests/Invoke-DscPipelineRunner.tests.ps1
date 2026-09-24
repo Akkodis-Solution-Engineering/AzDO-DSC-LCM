@@ -38,6 +38,15 @@ Describe "Invoke-DscPipelineRunner Intergration Tests" -Tag Integration {
         # Set the environment variable
         $ENV:AZDODSC_CACHE_DIRECTORY = Join-Path $TestDrive -ChildPath 'Cache'
 
+        # Get-DscResource needs Windows' libmi. Elsewhere, describe the mock AzureDevOpsDsc
+        # module's resources from its class definitions.
+        if (-not $IsWindows) {
+            $script:MockResourceModulePath = Join-Path $Global:RepositoryRoot 'Tests/PipelineRunner/Intergration/Resources/Modules/AzureDevOpsDsc'
+            Mock -CommandName Get-DscResource -MockWith {
+                Get-DscResourceFromClassDefinition -Path $script:MockResourceModulePath -Name @($PesterBoundParameters['Name'])[0]
+            }
+        }
+
         # Mock List
         Mock -CommandName Clone-Repository -MockWith { return Join-Path $TestDrive -ChildPath 'Configuration' }
         Mock -CommandName New-AzDoAuthenticationProvider -MockWith { return $null }
@@ -124,8 +133,8 @@ Describe "Invoke-DscPipelineRunner Intergration Tests" -Tag Integration {
             # Ensure that the report contains the correct number of resources
             $report | Should -HaveCount 4
             # Ensure that no result was skipped or failed
-            $report | Where-Object { $_.Result -eq 'SKIPPED' } | Should -BeNullOrEmpty
-            $report | Where-Object { $_.Result -eq 'FAIL' } | Should -BeNullOrEmpty
+            $report | Where-Object { $_.Status -eq 'SKIP' } | Should -BeNullOrEmpty
+            $report | Where-Object { $_.Status -eq 'FAIL' } | Should -BeNullOrEmpty
         }
 
         It "Should not throw any resource errors when using 'StubResources' test case" {
@@ -140,8 +149,8 @@ Describe "Invoke-DscPipelineRunner Intergration Tests" -Tag Integration {
             # Ensure that the report contains the correct number of resources
             $report | Should -HaveCount 4
             # Ensure that no result was skipped or failed
-            $report | Where-Object { $_.Result -eq 'SKIPPED' } | Should -BeNullOrEmpty
-            $report | Where-Object { $_.Result -eq 'FAIL' } | Should -BeNullOrEmpty            
+            $report | Where-Object { $_.Status -eq 'SKIP' } | Should -BeNullOrEmpty
+            $report | Where-Object { $_.Status -eq 'FAIL' } | Should -BeNullOrEmpty            
         }
 
         It "Should skip the resource when using conditional property" {
@@ -156,8 +165,8 @@ Describe "Invoke-DscPipelineRunner Intergration Tests" -Tag Integration {
             # Ensure that the report contains the correct number of resources
             $report | Should -HaveCount 4
             # Ensure that no result was skipped or failed
-            $report | Where-Object { $_.Result -eq 'SKIPPED' } | Should -HaveCount 1
-            $report | Where-Object { $_.Result -eq 'FAIL' } | Should -BeNullOrEmpty
+            $report | Where-Object { $_.Status -eq 'SKIP' } | Should -HaveCount 1
+            $report | Where-Object { $_.Status -eq 'FAIL' } | Should -BeNullOrEmpty
         }
 
         It "Should skip all tests with 'StopProcessing' is used" {
@@ -172,9 +181,9 @@ Describe "Invoke-DscPipelineRunner Intergration Tests" -Tag Integration {
             # Ensure that the report contains the correct number of resources
             $report | Should -HaveCount 4
             # Ensure that no result was skipped or failed
-            $report | Where-Object { $_.Result -eq 'SKIPPED' } | Should -HaveCount 3
-            $report | Where-Object { $_.Result -eq 'PASS' } | Should -HaveCount 1
-            $report | Where-Object { $_.Result -eq 'FAIL' } | Should -BeNullOrEmpty
+            $report | Where-Object { $_.Status -eq 'SKIP' } | Should -HaveCount 3
+            $report | Where-Object { $_.Status -eq 'OK' } | Should -HaveCount 1
+            $report | Where-Object { $_.Status -eq 'FAIL' } | Should -BeNullOrEmpty
         }
 
     }
@@ -285,11 +294,11 @@ Describe "Invoke-DscPipelineRunner Intergration Tests" -Tag Integration {
             $reports = Get-ChildItem -Path $params.ReportPath -Recurse -File
             $report = Import-CSV -Path $reports[0].FullName
 
-            # IndependentResource=PASS, Project=FAIL(x2 rows), DependentOnIndependent=SKIPPED, DependentOnProject=SKIPPED
-            $report | Should -HaveCount 5
-            $report | Where-Object { $_.Result -eq 'SKIPPED' } | Should -HaveCount 2
-            $report | Where-Object { $_.Result -eq 'FAIL' }    | Should -HaveCount 2
-            $report | Where-Object { $_.Result -eq 'PASS' }    | Should -HaveCount 1
+            # One row per resource. Project runs first and fails, so the other three are skipped.
+            $report | Should -HaveCount 4
+            $report | Where-Object { $_.Status -eq 'FAIL' } | Select-Object -ExpandProperty InstanceName | Should -Be 'Project'
+            $report | Where-Object { $_.Status -eq 'SKIP' } | Should -HaveCount 3
+            $report | Where-Object { $_.Status -eq 'OK' }   | Should -BeNullOrEmpty
         }
 
         It "Should skip only dependent resources and continue with independent resources when -ContinueOnError is specified" {
@@ -303,11 +312,11 @@ Describe "Invoke-DscPipelineRunner Intergration Tests" -Tag Integration {
             $reports = Get-ChildItem -Path $params.ReportPath -Recurse -File
             $report = Import-CSV -Path $reports[0].FullName
 
-            # IndependentResource=PASS, Project=FAIL(x2), DependentOnIndependent=PASS, DependentOnProject=SKIPPED
-            $report | Should -HaveCount 5
-            $report | Where-Object { $_.Result -eq 'SKIPPED' } | Should -HaveCount 1
-            $report | Where-Object { $_.Result -eq 'FAIL' }    | Should -HaveCount 2
-            $report | Where-Object { $_.Result -eq 'PASS' }    | Should -HaveCount 2
+            # Project=FAIL, DependentOnProject=SKIP, IndependentResource and DependentOnIndependent=OK
+            $report | Should -HaveCount 4
+            $report | Where-Object { $_.Status -eq 'FAIL' } | Select-Object -ExpandProperty InstanceName | Should -Be 'Project'
+            $report | Where-Object { $_.Status -eq 'SKIP' } | Select-Object -ExpandProperty InstanceName | Should -Be 'DependentOnProject'
+            ($report | Where-Object { $_.Status -eq 'OK' }).InstanceName | Sort-Object | Should -Be @('DependentOnIndependent', 'IndependentResource')
         }
 
     }

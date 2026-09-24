@@ -58,6 +58,8 @@ Describe "preCondition/postCondition through a real runner pass" -Tag Integratio
         . (Get-FunctionPath 'Start-DscRunner.ps1').FullName
         . (Get-FunctionPath 'GetDefaultValues.ps1').FullName
         . (Get-FunctionPath 'SetVariables.ps1').FullName
+        . (Get-FunctionPath 'Set-CompositeScope.ps1').FullName
+        . (Get-FunctionPath 'Test-RunnerReservedVariableName.ps1').FullName
         . (Get-FunctionPath 'ConvertTo-CaseInsensitiveHashtable.ps1').FullName
         . (Get-FunctionPath 'Expand-HashTable.ps1').FullName
         . (Get-FunctionPath 'Expand-StringInArray.ps1').FullName

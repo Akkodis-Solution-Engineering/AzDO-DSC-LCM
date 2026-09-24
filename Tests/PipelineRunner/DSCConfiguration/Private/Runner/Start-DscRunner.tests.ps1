@@ -14,6 +14,8 @@ Describe "Start-DscRunner Function Tests" -Tag Unit, MockedClass {
         $StopTaskProcessingPath = (Get-FunctionPath 'Stop-TaskProcessing.ps1').FullName
         $GetDefaultValuesPath = (Get-FunctionPath 'GetDefaultValues.ps1').FullName
         $SetVariablesPath = (Get-FunctionPath 'SetVariables.ps1').FullName
+        $SetCompositeScopePath = (Get-FunctionPath 'Set-CompositeScope.ps1').FullName
+        $TestReservedVariableNamePath = (Get-FunctionPath 'Test-RunnerReservedVariableName.ps1').FullName
         $ConvertToPipelineTaskPath = (Get-FunctionPath 'ConvertTo-PipelineTask.ps1').FullName
         $DSCBaseResourcePath = (Get-FunctionPath '001.DSCBaseResource.ps1').FullName
         $DSCResourcePath = (Get-FunctionPath '002.DSC_Resource.ps1').FullName
@@ -48,6 +50,8 @@ Describe "Start-DscRunner Function Tests" -Tag Unit, MockedClass {
         . $StopTaskProcessingPath
         . $GetDefaultValuesPath
         . $SetVariablesPath
+        . $SetCompositeScopePath
+        . $TestReservedVariableNamePath
         . $ConvertToPipelineTaskPath
 
         function Load-Mock {

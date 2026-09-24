@@ -1,4 +1,17 @@
+# Pester evaluates an It's -Skip: argument during discovery, so the skip reason is computed here
+# rather than in BeforeAll. See Get-WinRMSkipReason.
+$script:DscV2SkipReason = Get-DscV2EngineSkipReason
+$script:DscV2Available  = [string]::IsNullOrEmpty($script:DscV2SkipReason)
+
+if (-not $script:DscV2Available) {
+    Write-Warning "[DscV2Engine-RealInvokeDscResource.Integration] Skipping: $($script:DscV2SkipReason)"
+}
+
 Describe "DSC v2 environment lifecycle through a real Invoke-DscResource" -Tag Integration, DscV2SelfHosted {
+
+    AfterAll {
+        Restore-ProcessEnvironment -Snapshot $script:ProcessEnvironment
+    }
 
     # This suite proves the runner can stand up ("build") and tear down an environment end-to-end
     # through the REAL DSC v2 engine -- Actions/Engine/DscV2.ps1 -> Invoke-DscResource -- with NO
@@ -9,13 +22,9 @@ Describe "DSC v2 environment lifecycle through a real Invoke-DscResource" -Tag I
     # Because Invoke-DscResource is the Windows / PowerShell-DSC path, this suite is tagged
     # 'DscV2SelfHosted' and is intended to run only on the self-hosted Windows + PowerShell 7
     # runner (scripts/Invoke-DscV2SelfHostedTests.ps1 filters to exactly this tag). It is also
-    # tagged 'Integration' for discoverability, but its BeforeAll imports
-    # PSDesiredStateConfiguration with -ErrorAction Stop when Invoke-DscResource is not already
-    # present, which FAILS the whole Describe block on a host that genuinely has no DSC v2 engine
-    # (e.g. Linux) rather than skipping gracefully - unlike the WinRM/SSH/SecretManagement
-    # integration suites, which probe first and gate individual It blocks with -Skip:. Run this
-    # file only through the dedicated self-hosted script, or on a host known to have
-    # PSDesiredStateConfiguration.
+    # tagged 'Integration', so it also runs with the rest of the integration suites. Where
+    # there is no usable DSC v2 engine (e.g. Linux, see Get-DscV2EngineSkipReason) every It is
+    # skipped and BeforeAll/BeforeEach do nothing, like the WinRM/SSH/SecretManagement suites.
     #
     # The fixture resource maps a marker file's presence on disk to a cloud object "existing", so
     # the lifecycle mirrors the Example Configuration's build/teardown shape:
@@ -34,6 +43,10 @@ Describe "DSC v2 environment lifecycle through a real Invoke-DscResource" -Tag I
     # engine action file resolves without an installed module.
 
     BeforeAll {
+        # Suites share one process; see Save-ProcessEnvironment for why this matters.
+        $script:ProcessEnvironment = Save-ProcessEnvironment
+
+        if (Get-DscV2EngineSkipReason) { return }
 
         # The DSC v2 engine must be usable on this host.
         if (-not (Get-Command -Name Invoke-DscResource -ErrorAction SilentlyContinue)) {
@@ -65,6 +78,8 @@ Describe "DSC v2 environment lifecycle through a real Invoke-DscResource" -Tag I
         . (Get-FunctionPath 'Start-DscRunner.ps1').FullName
         . (Get-FunctionPath 'GetDefaultValues.ps1').FullName
         . (Get-FunctionPath 'SetVariables.ps1').FullName
+        . (Get-FunctionPath 'Set-CompositeScope.ps1').FullName
+        . (Get-FunctionPath 'Test-RunnerReservedVariableName.ps1').FullName
         . (Get-FunctionPath 'ConvertTo-CaseInsensitiveHashtable.ps1').FullName
         . (Get-FunctionPath 'Expand-HashTable.ps1').FullName
         . (Get-FunctionPath 'Expand-StringInArray.ps1').FullName
@@ -212,6 +227,8 @@ Describe "DSC v2 environment lifecycle through a real Invoke-DscResource" -Tag I
     }
 
     BeforeEach {
+        if (Get-DscV2EngineSkipReason) { return }
+
         # A fresh, empty environment (its own state directory + freshly written configs) per test.
         $script:StateDir = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $script:StateDir -Force | Out-Null
@@ -221,7 +238,7 @@ Describe "DSC v2 environment lifecycle through a real Invoke-DscResource" -Tag I
         $script:StopTaskProcessing = $false
     }
 
-    It "builds the environment: real Invoke-DscResource creates every marker" {
+    It "builds the environment: real Invoke-DscResource creates every marker" -Skip:(-not $script:DscV2Available) {
         $build = Start-DscRunner -FilePath $script:Configs.Build -ConfigurationMode 'ApplyOnly' -DSCCompositeResourcePath $script:CompositeResourcePath -Engine 'DscV2'
 
         # A Present Project never triggers Stop-TaskProcessing, so the whole file runs to the end.
@@ -236,7 +253,7 @@ Describe "DSC v2 environment lifecycle through a real Invoke-DscResource" -Tag I
         Test-MarkerExists -StateDir $script:StateDir -Name 'Group'               | Should -BeTrue
     }
 
-    It "tears the environment down: the Absent Project halts the run via Stop-TaskProcessing" {
+    It "tears the environment down: the Absent Project halts the run via Stop-TaskProcessing" -Skip:(-not $script:DscV2Available) {
         # Start from an already-provisioned environment.
         $null = Start-DscRunner -FilePath $script:Configs.Build -ConfigurationMode 'ApplyOnly' -DSCCompositeResourcePath $script:CompositeResourcePath -Engine 'DscV2'
         Test-MarkerExists -StateDir $script:StateDir -Name $script:ProjectMarker | Should -BeTrue
@@ -254,7 +271,7 @@ Describe "DSC v2 environment lifecycle through a real Invoke-DscResource" -Tag I
         Test-MarkerExists -StateDir $script:StateDir -Name 'Group'               | Should -BeTrue
     }
 
-    It "completes a full build -> teardown cycle" {
+    It "completes a full build -> teardown cycle" -Skip:(-not $script:DscV2Available) {
         $build = Start-DscRunner -FilePath $script:Configs.Build -ConfigurationMode 'ApplyOnly' -DSCCompositeResourcePath $script:CompositeResourcePath -Engine 'DscV2'
         $build.Status | Should -Be 'Completed'
         Test-MarkerExists -StateDir $script:StateDir -Name $script:ProjectMarker | Should -BeTrue
@@ -264,7 +281,7 @@ Describe "DSC v2 environment lifecycle through a real Invoke-DscResource" -Tag I
         Test-MarkerExists -StateDir $script:StateDir -Name $script:ProjectMarker | Should -BeFalse
     }
 
-    It "reports drift as failures in Test mode without provisioning anything" {
+    It "reports drift as failures in Test mode without provisioning anything" -Skip:(-not $script:DscV2Available) {
         # Audit mode (Test only) over an empty environment: every resource is drift, and the
         # runner must not call Set -- so no marker is created.
         $test = Start-DscRunner -FilePath $script:Configs.Build -ConfigurationMode 'Audit' -DSCCompositeResourcePath $script:CompositeResourcePath -Engine 'DscV2'

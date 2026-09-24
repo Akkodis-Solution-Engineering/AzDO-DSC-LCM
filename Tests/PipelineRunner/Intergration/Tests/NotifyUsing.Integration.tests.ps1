@@ -1,5 +1,9 @@
 Describe "notify/using() gated reads through a real runner pass" -Tag Integration, HostedIntegration {
 
+    AfterAll {
+        Restore-ProcessEnvironment -Snapshot $script:ProcessEnvironment
+    }
+
     # The unit suites cover the two halves of this feature in isolation: using.tests.ps1 drives
     # invoke-using against a hand-built $script:notifyDeclarations / $script:resourceOutputs pair,
     # Expand-NotifyDependsOn.tests.ps1 drives the ordering rule, and Start-DscRunner.tests.ps1
@@ -33,6 +37,8 @@ Describe "notify/using() gated reads through a real runner pass" -Tag Integratio
     # hermetic and cross-platform - no Invoke-DscResource, no dsc.exe.
 
     BeforeAll {
+        # Suites share one process; see Save-ProcessEnvironment for why this matters.
+        $script:ProcessEnvironment = Save-ProcessEnvironment
 
         # This repo's class-based configuration parsing chain (MERGE-PLAN.md §4-5), which
         # Start-DscRunner's [DSCConfigurationFile]::New() call and ConvertTo-PipelineTask depend
@@ -57,6 +63,8 @@ Describe "notify/using() gated reads through a real runner pass" -Tag Integratio
         . (Get-FunctionPath 'Start-DscRunner.ps1').FullName
         . (Get-FunctionPath 'GetDefaultValues.ps1').FullName
         . (Get-FunctionPath 'SetVariables.ps1').FullName
+        . (Get-FunctionPath 'Set-CompositeScope.ps1').FullName
+        . (Get-FunctionPath 'Test-RunnerReservedVariableName.ps1').FullName
         . (Get-FunctionPath 'ConvertTo-CaseInsensitiveHashtable.ps1').FullName
         . (Get-FunctionPath 'Expand-HashTable.ps1').FullName
         . (Get-FunctionPath 'Expand-StringInArray.ps1').FullName

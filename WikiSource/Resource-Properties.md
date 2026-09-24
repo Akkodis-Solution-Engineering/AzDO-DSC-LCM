@@ -23,9 +23,9 @@ reads from a resource, in the order the runner reads them, with worked examples 
 | [`mergable`](Composite-and-Stub-Resources#stub-partial-resources) | no | bool | Opts a resource in to being a stub `merge_with` target. |
 | [`executionMethodOverride`](Scheduled-Enforcement#executionmethodoverride) | no | `None` \| `Test` \| `Set` | Forces this resource's effective mode regardless of the run's. |
 
-A `type: composite/<name>` resource is a different shape again — it carries no `properties` of
-its own kind and is replaced wholesale by another file's resources before any of the above is
-read. See [Composite and Stub Resources](Composite-and-Stub-Resources#composite-resources).
+A `type: composite/<name>` resource is a different shape again — it is replaced wholesale by
+another file's resources before any of the above is read, and its `properties` are passed into
+that file as parameters rather than to a DSC resource. See [Composite and Stub Resources](Composite-and-Stub-Resources#composite-resources).
 
 A resource carrying every one of them:
 

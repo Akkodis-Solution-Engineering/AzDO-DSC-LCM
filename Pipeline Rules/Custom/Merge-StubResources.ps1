@@ -3,7 +3,7 @@
 Merges stub resources with their corresponding target resources from the pipeline input.
 
 .DESCRIPTION
-The `Merge-StubResources` cmdlet identifies stub resources from the provided pipeline input and merges their properties with the corresponding target resources. If no stub resources are found, the original pipeline resources are returned. The merging process groups stub resources by the 'MergeWith' property and combines their properties with the target resources.
+The `Merge-StubResources` cmdlet identifies stub resources from the provided pipeline input and merges their properties with the corresponding target resources. The target must exist exactly once in the same file and must declare `mergable: true`; otherwise the rule throws. If no stub resources are found, the original pipeline resources are returned. The merging process groups stub resources by the 'MergeWith' property and combines their properties with the target resources.
 
 .PARAMETER PipelineResources
 An array of objects representing the pipeline resources, which may include stub resources.
@@ -53,18 +53,28 @@ ForEach ($GroupResource in $GroupResources) {
     $GroupResourceName = $split[-1]
     $GroupResourceType = $split[0..($split.Length - 2)] -join '/'
 
-    $Resource = $Resources | Where-Object { $_.Name -eq $GroupResourceName -and $_.Type -eq $GroupResourceType }
+    $Resource = @($Resources | Where-Object { $_.Name -eq $GroupResourceName -and $_.Type -eq $GroupResourceType })
 
-    # If the resource is not found, write a warning and continue
-    if ($null -eq $Resource) {
-        Write-Warning "[Merge-StubResources] Resource not found: $($GroupResource.Name)"
-        continue
+    # The target must exist exactly once in the same compiled file.
+    if ($Resource.Count -eq 0) {
+        throw "[Merge-StubResources] Resource '$($GroupResource.Name)' named by merge_with was not found in this configuration file."
+    }
+    if ($Resource.Count -gt 1) {
+        throw "[Merge-StubResources] Resource '$($GroupResource.Name)' named by merge_with was found $($Resource.Count) times in this configuration file."
+    }
+    $Resource = $Resource[0]
+
+    # The target must opt in to being merged into.
+    if ($Resource.mergable -ne $true) {
+        throw "[Merge-StubResources] Resource '$($GroupResource.Name)' is not a stub target. Add 'mergable: true' to it to allow merge_with."
     }
 
     # Merge the stub resource properties with resource properties.
     Write-Verbose "[Merge-StubResources] Merging properties of stub resources with target resource: $($Resource.Name)"
+    # The stub is passed as -source so its scalar values override the target's, and each later
+    # stub overrides the ones before it. Collections are combined, and nested hashtables merge.
     $GroupResource.Group | ForEach-Object {
-        $Resource.properties = Join-Properties -source $Resource.properties -merge $_.properties
+        $Resource.properties = Join-Properties -source $_.properties -merge $Resource.properties
         Write-Verbose "[Merge-StubResources] Merged properties for resource: $($Resource.Name)"
     }
 }

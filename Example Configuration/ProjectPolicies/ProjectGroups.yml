@@ -1,4 +1,3 @@
-
 parameters: {}
 
 variables: {
@@ -11,26 +10,32 @@ variables: {
 
 resources:
 
-  - name: DSCStub
-    merge_with: AzureDevOpsDsc/AzDoProjectGroup/CON Readers
-    
-
   - name: CON Readers
-    type: AzureDevOpsDsc/AzDoProjectGroup
-    dependsOn: 
-      - AzureDevOpsDsc/AzDoProject/Project
+    type: AzureDevOpsDscNative/AzDoProjectGroup
+    # mergable (specific to DSC.PipelineRunner.Akkodis) declares this resource as a stub-resource
+    # target: Projects/Present/Magenta.yml merges a property into it with merge_with.
+    mergable: true
+    dependsOn:
+      - AzureDevOpsDscNative/AzDoProject/Project
     properties:
-      ProjectName: $ProjectName
-      GroupName: $ProjectGroups_Role_CONReaders
+      ProjectName: $(variables('ProjectName'))
+      GroupName: $(variables('ProjectGroups_Role_CONReaders'))
       GroupDescription: The following group provides members with read access to the project and codebase.
 
   - name: CON Board Administrators
-    condition: $ProjectWorkBoardsStatus -eq 'enabled'
-    type: AzureDevOpsDsc/AzDoProjectGroup
-    dependsOn: 
-      - AzureDevOpsDsc/AzDoProject/Project
+    # preCondition is evaluated before the resource runs; $false skips it. The bare 'condition'
+    # key is the deprecated spelling and still works (with a warning). Only the function-language
+    # accessors on the Assert-SafeConditionExpression allow-list are permitted here: variables()
+    # reads a Datum-resolved variable (a missing key returns $null rather than throwing), and
+    # equals()/not() compose a side-effect-free predicate. Arguments are space-separated
+    # PowerShell command syntax - `equals (variables 'X') 'Y'`, not `equals(X, Y)`, which binds
+    # a single two-element array and throws. Magenta never sets Project_Service_WorkBoards, so
+    # this is $false for it and the group is skipped.
+    preCondition: equals (variables 'Project_Service_WorkBoards') 'enabled'
+    type: AzureDevOpsDscNative/AzDoProjectGroup
+    dependsOn:
+      - AzureDevOpsDscNative/AzDoProject/Project
     properties:
-      ProjectName: $ProjectName
-      GroupName: $ProjectGroups_Role_CONBoardAdministrators
+      ProjectName: $(variables('ProjectName'))
+      GroupName: $(variables('ProjectGroups_Role_CONBoardAdministrators'))
       GroupDescription: The following group provides members with administrative access to the project boards.
-

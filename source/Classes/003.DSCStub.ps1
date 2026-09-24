@@ -36,7 +36,7 @@ class DSCStub : DSCBaseResource {
         }
 
         # Merge the Properties
-        $dscResources[$indexPos].properties = Join-Properties -source $dscResources[$indexPos].properties -merge $this.properties
+        $dscResources[$indexPos].properties = Join-Properties -source $this.properties -merge $dscResources[$indexPos].properties
 
         return $dscResources
         

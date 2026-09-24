@@ -3,30 +3,51 @@ parameters: {}
 
 variables: {
   ProjectName: '[x={ $Node.Project }=]',
-  Project_Ensure: '[x={ $Node.ProjectPresence }=]'  
+  Project_Ensure: '[x={ $Node.ProjectPresence }=]'
 }
 
 resources:
 
   - name: Project
-    type: AzureDevOpsDsc/AzDoProject
+    type: AzureDevOpsDscNative/AzDoProject
+    # Removing the project halts the rest of the run (everything else cascades under it).
+    # postExecutionScript is plain PowerShell, not a function-language expression, so it reads
+    # the script-scope $Project_Ensure variable directly and needs
+    # PipelineRunnerSettings.AllowExecutionScripts. A postCondition of
+    # `result().InDesiredState -or stopProcessing()` is NOT used instead: this resource is also
+    # evaluated in Audit mode, where a project that does not exist yet is normal drift rather
+    # than a reason to stop the run. The Ensure guard below only stops a teardown.
     postExecutionScript: if ($Project_Ensure -eq 'Absent') { Stop-TaskProcessing }
     properties:
-      projectName: $ProjectName
-      projectDescription: $ProjectDescription
+      # variables('Name') is the preferred way to read a Datum-resolved variable inside a
+      # property. It reads the same value as a bare $Name reference, but keeps properties,
+      # preCondition and postCondition on one accessor instead of two syntaxes.
+      projectName: $(variables('ProjectName'))
+      projectDescription: $(variables('ProjectDescription'))
       visibility: private
       SourceControlType: Git
       ProcessTemplate: Agile
-      Ensure: $( if ([string]::IsNullOrEmpty($Project_Ensure)) { 'Present' } else { $Project_Ensure } )
+      Ensure: $( if ([string]::IsNullOrEmpty((variables 'Project_Ensure'))) { 'Present' } else { variables 'Project_Ensure' } )
 
   - name: Project Services
-    type: AzureDevOpsDsc/AzDoProjectServices
-    dependsOn: 
-      - AzureDevOpsDsc/AzDoProject/Project
+    type: AzureDevOpsDscNative/AzDoProjectServices
+    dependsOn:
+      - AzureDevOpsDscNative/AzDoProject/Project
+    # postCondition is evaluated after Test/Set. result() (only available here) reads this
+    # resource's own normalized engine outcome, and a $false result marks the resource FAIL
+    # regardless of what the engine reported: "converged, or we are not building a Present
+    # project".
+    postCondition: result().InDesiredState -or (not (equals (variables 'Project_Ensure') 'Present'))
     properties:
-      projectName: $ProjectName
-      GitRepositories: $( if ([string]::IsNullOrEmpty($Project_Service_GitRepositories)) { 'disabled' } else { $Project_Service_GitRepositories } )
-      BuildPipelines: $( if ([string]::IsNullOrEmpty($Project_Service_BuildPipelines)) { 'disabled' } else { $Project_Service_BuildPipelines } )
-      AzureArtifact: $( if ([string]::IsNullOrEmpty($Project_Service_AzureArtifact)) { 'disabled' } else { $Project_Service_AzureArtifact } )
-      WorkBoards: $( if ([string]::IsNullOrEmpty($Project_Service_WorkBoards)) { 'disabled' } else { $Project_Service_WorkBoards } )
-      TestPlans: $( if ([string]::IsNullOrEmpty($Project_Service_TestPlans)) { 'disabled' } else { $Project_Service_TestPlans } )
+      projectName: $(variables('ProjectName'))
+      GitRepositories: $( if ([string]::IsNullOrEmpty((variables 'Project_Service_GitRepositories'))) { 'disabled' } else { variables 'Project_Service_GitRepositories' } )
+      BuildPipelines: $( if ([string]::IsNullOrEmpty((variables 'Project_Service_BuildPipelines'))) { 'disabled' } else { variables 'Project_Service_BuildPipelines' } )
+      AzureArtifact: $( if ([string]::IsNullOrEmpty((variables 'Project_Service_AzureArtifact'))) { 'disabled' } else { variables 'Project_Service_AzureArtifact' } )
+      WorkBoards: $( if ([string]::IsNullOrEmpty((variables 'Project_Service_WorkBoards'))) { 'disabled' } else { variables 'Project_Service_WorkBoards' } )
+      TestPlans: $( if ([string]::IsNullOrEmpty((variables 'Project_Service_TestPlans'))) { 'disabled' } else { variables 'Project_Service_TestPlans' } )
+
+# target / resourceCredential are intentionally not demonstrated in this example. Every resource
+# here is AzureDevOpsDscNative, which calls the Azure DevOps REST API in-process, so there is no
+# WinRM/SSH host to remote into and no credential to inject. See the Remote Targets and
+# Credentials wiki page for the syntax, which applies to resource modules that configure a
+# remote machine (e.g. PSDscResources/SqlServerDsc).

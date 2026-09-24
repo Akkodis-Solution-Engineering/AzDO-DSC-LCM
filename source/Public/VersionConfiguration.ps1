@@ -5,7 +5,10 @@ Data ModuleConfigurationData {
     @{
         # Define the minimum and maximum versions for the YAML Configuration.
         YAMLConfigurationMinimumVersion = '0.1'
-        YAMLConfigurationMaximumVersion = '0.9' # 
+        YAMLConfigurationMaximumVersion = '0.9'
+        # The configuration version this release is written for. Test-DatumConfiguration warns
+        # when a configuration is two or more minor versions behind it.
+        YAMLConfigurationCurrentVersion = '0.5'
         # Define the minimum and maximum versions for the PSDesiredStateConfiguration Module.
         PSDesiredStateConfigurationMinimumVersion = '2.0'
         PSDesiredStateConfigurationMaximumVersion = '2.9'
@@ -13,7 +16,7 @@ Data ModuleConfigurationData {
         DSCResourceMinimumVersion = '1.0'
         DSCResourceMaximumVersion = '1.9'
         # Define the minimum and maximum versions for the DSC.PipelineRunner.Akkodis module itself.
-        PipelineRunnerMinimumVersion = '0.1'
+        PipelineRunnerMinimumVersion = '0.0.1'
         PipelineRunnerMaximumVersion = '1.9'
     }
 

@@ -28,75 +28,45 @@ function Join-Properties {
     # Iterate over the source hashtable
     foreach ($key in $source.Keys) {
 
-        # Does the key exist on both hashtables?
-        if ($merge.ContainsKey($key)) {
+        # Key only exists in source, or one side is null: keep whichever value is set.
+        if (-not $merge.ContainsKey($key) -or $null -eq $merge[$key]) {
+            $result[$key] = $source[$key]
+            continue
+        }
+        if ($null -eq $source[$key]) {
+            $result[$key] = $merge[$key]
+            continue
+        }
 
-            # Are they the same type? If not, preference the source and log a warning.
-            if ($source[$key].GetType().Name -ne $merge[$key].GetType().Name) {
-                Write-Warning "[Join-Properties] Type mismatch for key '$key'. Preferring source value."
-                $result[$key] = $source."$key"
-            }
-
-            # Is the key a hashtable?
-            if ($source[$key] -is [hashtable] -and $merge[$key] -is [hashtable]) {
-                # Call Join-Properties and recurse
-                $result[$key] = Join-Properties -source $source[$key] -merge $merge[$key]
-            }
-
-            # If the key is a collection (e.g., array)
-            elseif ($source[$key].GetType().BaseType.Name -eq 'Array') {
-
-                # Combine the collections
-                $combined = $source[$key] + $merge[$key]
-                # Attempt to remove duplicates
-                
-                # If the values within the collection are an array of strings, we can use Select-Object -Unique
-                $array, $collection = $combined.Where({ $_.GetType().Name -in 'String','Int32','Boolean' }, 'Split')
-             
-                # Iterate through the collection and remove duplicates
-                $arrayList = [System.Collections.Generic.List[Object]]::new()
-
-                # If the values within the collection are not strings, we need to use a different method
-                ForEach ($item in $collection) {
-                    
-                    # Create a custom hashtable that stores an ordered hashtable and a compressed version of the ordered hashtable.
-                    $ht = @{
-                        Value = Sort-Hashtable $item
-                        compressed = $null
-                    }
-
-                    $compressed = $ht.Value | ConvertTo-Json -Compress
-                    # Check for duplicates within the arraylist
-                    
-                    $exists = $arrayList | Where-Object { $_.compressed -eq $compressed }
-
-                    # If the item already exists, skip it
-                    if (@($exists).Count -ne 0) {
-                        write-verbose "[Join-Properties] Duplicate found: $compressed"
-                        $arrayList.Add($ht)
-                    }
-
-                }
-
-                if ($arrayList.Count -eq 0) {
-                    $result[$key] = $array | Select-Object -Unique
+        if ($source[$key] -is [System.Collections.IDictionary] -and $merge[$key] -is [System.Collections.IDictionary]) {
+            # Both are hashtables: recurse.
+            $result[$key] = Join-Properties -source ([hashtable]$source[$key]) -merge ([hashtable]$merge[$key])
+        }
+        elseif ($source[$key] -is [System.Collections.IList] -and $merge[$key] -is [System.Collections.IList]) {
+            # Both are collections (object[] from PowerShell, List[Object] from YAML): combine them,
+            # source items first, dropping duplicates. Hashtable items are compared by their
+            # key-sorted JSON so key order does not matter.
+            $seen = [System.Collections.Generic.HashSet[string]]::new()
+            $combined = [System.Collections.Generic.List[Object]]::new()
+            foreach ($item in @($source[$key]) + @($merge[$key])) {
+                $identity = if ($item -is [System.Collections.IDictionary]) {
+                    Sort-Hashtable -HashTable $item | ConvertTo-Json -Compress -Depth 20
                 } else {
-                    $result[$key] = ($array | Select-Object -Unique) + $arrayList.Value
+                    ConvertTo-Json -InputObject $item -Compress -Depth 20
                 }
-
+                if ($seen.Add($identity)) {
+                    $combined.Add($item)
+                } else {
+                    Write-Verbose "[Join-Properties] Duplicate found: $identity"
+                }
             }
-
-            # If the key is a string array
-            elseif ($source[$key] -is [string[]] -and $merge[$key] -is [string[]]) {
-                # Combine the string arrays
-                $result[$key] = $source[$key] + $merge[$key] | Select-Object -Unique
-            } else {
-                # Set the value from the source
-                $result[$key] = $source[$key]
+            $result[$key] = $combined.ToArray()
+        }
+        else {
+            # Scalars (or mismatched shapes): the source value wins.
+            if ($source[$key].GetType() -ne $merge[$key].GetType()) {
+                Write-Warning "[Join-Properties] Type mismatch for key '$key'. Preferring source value."
             }
-
-        } else {
-            # Key only exists in source
             $result[$key] = $source[$key]
         }
 
@@ -108,9 +78,9 @@ function Join-Properties {
         # Does the key exist on both hashtables
         if (-not $source.ContainsKey($key)) {
             # No? Set the value from the merge
-            if ($merge[$key] -is [hashtable]) {
+            if ($merge[$key] -is [System.Collections.IDictionary]) {
                 # If it's a hashtable, call Join-Properties and recurse
-                $result[$key] = Join-Properties -source @{} -merge $merge[$key]
+                $result[$key] = Join-Properties -source @{} -merge ([hashtable]$merge[$key])
             } else {
                 $result[$key] = $merge[$key]
             }

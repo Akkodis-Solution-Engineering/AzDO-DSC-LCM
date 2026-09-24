@@ -19,7 +19,7 @@ PipelineConfigurationMode:
 
 
 # Configuration and Pipeline Runner Versioning Settings for the Configuration. This ensures that the right version of the pipeline runner is used to apply the configuration.
-PipelineRunnerVersionSettings:
+PipelineRunnerSettings:
   ConfigurationVersion: 0.1
   PipelineRunnerVersion: 0.2
   DSCResourceVersion: 2.0

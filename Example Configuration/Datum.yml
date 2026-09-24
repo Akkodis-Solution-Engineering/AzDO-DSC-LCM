@@ -14,13 +14,49 @@ DatumHandlersThrowOnError: true
 # Datum Handlers are used to process Datum values.
 default_lookup_options: MostSpecific
 
-# Configuration and Pipeline Runner Versioning Settings for the Configuration. This ensures that the right version of the pipeline runner is used to apply the configuration.
-PipelineRunnerVersionSettings:
-  ConfigurationVersion: 0.2
-  PipelineRunnerVersion: 0.3
-  DSCResourceVersion: 2.0
+# How the runner behaves for this configuration: the module version it targets, the engine that
+# evaluates its resources, whether lifecycle scripts are allowed, what to do about a reboot, and
+# where resources run by default. It is read from this source directory before compilation. A
+# compiled per-node file does not carry the block, so these settings apply to the whole
+# configuration, not per node. See the PipelineRunnerSettings wiki page for every key.
+PipelineRunnerSettings:
 
-# Define the Pipeline Configuration Mode for the Datum Configuration.
+  # Versioning. Test-DatumConfiguration throws unless both of these cast to [Version], and
+  # unless ConfigurationVersion falls inside the module's supported range (0.1 to 0.9, from
+  # source/Public/VersionConfiguration.ps1). This runs during Build-DatumConfiguration, so a
+  # configuration pinned to the wrong runner fails at compile time rather than mid-run.
+  ConfigurationVersion: 0.5
+  PipelineRunnerVersion: 0.0.5
+
+  # Engine selection. Engine names the engine action directly and takes precedence over the
+  # DSCResourceVersion hint it replaces (which selected by major version: 2 -> DscV2,
+  # 3 -> DscV3). DscV2 evaluates resources through Invoke-DscResource; DscV3 shells out to
+  # dsc.exe per resource; Auto picks DscV3 when dsc is on PATH and DscV2 otherwise.
+  # An explicit -Engine parameter on the command still overrides this.
+  Engine: DscV2
+
+  # ProjectPolicies/Project.yml uses postExecutionScript (Stop-TaskProcessing on teardown), so
+  # this configuration must opt in to lifecycle scripts. Without it the
+  # Test-ExecutionScriptsAllowed pre-parse rule fails the run before any resource is evaluated.
+  # The gate is on the presence of a script, not on whether it would have run.
+  AllowExecutionScripts: true
+
+  # Reboot policy for a resource whose Set() reports RebootRequired. Fail (the default, stated
+  # here explicitly) records the resource as FAIL and skips the rest of the file, because a
+  # local runner cannot safely restart the machine it is running on and then resume. Ignore
+  # continues without restarting. A resource aimed at a remote target restarts and waits
+  # regardless of this setting - the runner is not what needs to come back up.
+  Reboot: Fail
+
+  # The file-level default execution target. Local (the default, stated here explicitly) never
+  # invokes the Target hook at all. Set this to WinRM or SSH to make remote the default, and
+  # give each resource its own target: block for the computer name and credential; any
+  # resource can still override the action outright with target: { action: Local }.
+  Target: Local
+
+# Scheduled enforcement (specific to DSC.PipelineRunner.Akkodis). Sets the run's
+# ConfigurationMode when Invoke-DscPipelineRunner / Invoke-DscRunner is called without
+# -ConfigurationMode. See the Scheduled Enforcement wiki page.
 PipelineConfigurationMode:
   # The Pipeline Configuration Mode can be one of the following: ApplyOnly, Audit, Enforce, Scheduled
   ConfigurationMode: Scheduled
@@ -54,4 +90,3 @@ lookup_options:
     merge_options:
       tuple_keys:
         - name
-

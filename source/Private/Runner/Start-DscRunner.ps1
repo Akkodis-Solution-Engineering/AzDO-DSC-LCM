@@ -14,7 +14,7 @@ Pipeline shape (see MERGE-PLAN.md §4-5):
 
   [DSCConfigurationFile]::New()  (unchanged: YAML/JSON -> typed class instances)
         -> Merge-StubResources    (unchanged: stub merge by 'mergable'/'merge_with')
-        -> Expand-CompositeResources (NEW: DSCCompositeResource -> inlined DSC_Resource[])
+        -> Expand-CompositeResources (DSCCompositeResource -> inlined DSC_Resource[], each tagged with its composite's scope)
         -> ConvertTo-PipelineTask (NEW, thin: DSC_Resource -> plain [pscustomobject])
         -> Expand-NotifyDependsOn -> Sort-DependsOn -> PreParse rules -> this engine-agnostic loop
 
@@ -255,10 +255,16 @@ function Start-DscRunner {
     $script:currentNodeName          = $configName
     $script:currentConfigurationFile = $FilePath
 
+    # The file's own parameters/variables. Set-CompositeScope restores these before each
+    # resource and layers a composite's own values on top for resources that came from one.
+    $baselineParameters = @{} + $parameters
+    $baselineVariables  = @{} + $variables
+
     try {
         foreach ($task in $tasks) {
 
             $TaskCounter++
+            Set-CompositeScope -CompositeScope $task.CompositeScope -BaselineParameters $baselineParameters -BaselineVariables $baselineVariables
             $resourceKey = "$($task.type)/$($task.name)"
             $resourceStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
@@ -578,6 +584,9 @@ function Start-DscRunner {
 
         $script:currentNodeName          = $null
         $script:currentConfigurationFile = $null
+
+        # Drop the last resource's composite layer so it does not outlive this file.
+        Set-CompositeScope -CompositeScope @() -BaselineParameters $baselineParameters -BaselineVariables $baselineVariables
 
         foreach ($cachedSession in $sessionCache.Values) {
             if ($cachedSession.CimSession) {

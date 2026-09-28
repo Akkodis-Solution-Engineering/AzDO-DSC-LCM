@@ -8,7 +8,7 @@ variables: {
 
 resources:
 
-  # Listed first in YAML so Sort-DependsOn places it last after the independent resources
+  # Depends on Project — skipped when Project fails
   - name: DependentOnProject
     type: AzureDevOpsDsc/AzDoProjectServices
     dependsOn:
@@ -25,14 +25,14 @@ resources:
       projectName: $ProjectName
       RepositoryName: MockRepo
 
-  # Listed second-to-last in YAML — ends up second in sorted order (after IndependentResource)
+  # Its Set is mocked to throw
   - name: Project
     type: AzureDevOpsDsc/AzDoProject
     properties:
       projectName: $ProjectName
       Ensure: Present
 
-  # Listed last in YAML — ends up first in sorted order (no dependencies, Insert(0) reversal)
+  # No dependencies — runs whether or not Project fails
   - name: IndependentResource
     type: AzureDevOpsDsc/AzDoGitRepository
     properties:

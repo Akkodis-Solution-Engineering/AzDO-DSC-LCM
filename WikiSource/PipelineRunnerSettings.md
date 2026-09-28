@@ -9,8 +9,8 @@ does not carry the block, so settings cannot be varied per node today.
 
 ```yaml
 PipelineRunnerSettings:
-  ConfigurationVersion: 0.2
-  PipelineRunnerVersion: 1.0.0
+  ConfigurationVersion: 0.5
+  PipelineRunnerVersion: 0.0.5
   DSCResourceVersion: 2.0
   Engine: DscV3
   AllowExecutionScripts: true
@@ -19,12 +19,6 @@ PipelineRunnerSettings:
 ```
 
 Every key is optional except the two version keys that `Test-DatumConfiguration` validates.
-
-> **Naming note.** Some configuration examples in this repository (including
-> `Example Configuration/Datum.yml`) nest the two version keys under a differently-named
-> `PipelineRunnerVersionSettings` block instead of directly under `PipelineRunnerSettings`.
-> `Test-DatumConfiguration` and this page both describe `PipelineRunnerSettings` as read by the
-> shipped code — check which spelling a given example or fixture actually uses before copying it.
 
 This repo also adds a sibling top-level block, `PipelineConfigurationMode`, for time-windowed
 (`Scheduled`) enforcement — see [Scheduled Enforcement and Execution
@@ -47,14 +41,24 @@ resolves to the run's effective mode before any file is compiled.
 
 ```yaml
 PipelineRunnerSettings:
-  ConfigurationVersion: 0.2
-  PipelineRunnerVersion: 1.0.0
+  ConfigurationVersion: 0.5
+  PipelineRunnerVersion: 0.0.5
 ```
 
 `Test-DatumConfiguration` throws if the block is absent, if either value fails to cast to
-`[Version]`, or if the declared configuration version falls outside the module's supported
-range. It also warns when the configuration version trails the installed
-`PSDesiredStateConfiguration` by two or more minor versions.
+`[Version]`, or if any of the following falls outside the bounds in
+`source/Public/VersionConfiguration.ps1`:
+
+| Checked value | Minimum | Maximum |
+| --- | --- | --- |
+| `ConfigurationVersion` (major.minor) | `0.1` | `0.9` |
+| Installed `PSDesiredStateConfiguration` module | `2.0` | `2.9` |
+| Installed `DSC.PipelineRunner.Akkodis` module | `0.0.1` | `1.9` |
+
+`PipelineRunnerVersion` itself is only checked to be a valid version. It records the
+`DSC.PipelineRunner.Akkodis` release the configuration was authored against (`ModuleVersion` in
+`source/DSC.PipelineRunner.Akkodis.psd1`); the range check applies to the module actually
+installed.
 
 Because this runs during `Build-DatumConfiguration`, a configuration pinned to an older runner
 fails at compile time with a version message, not halfway through a `Set` run.
@@ -186,8 +190,8 @@ resources:
 
 ```yaml
 PipelineRunnerSettings:
-  ConfigurationVersion: 0.2
-  PipelineRunnerVersion: 1.0.0
+  ConfigurationVersion: 0.5
+  PipelineRunnerVersion: 0.0.5
   DSCResourceVersion: 2.0
 ```
 
@@ -198,8 +202,8 @@ Everything else takes its default: `DscV2`, no execution scripts, `Reboot: Fail`
 
 ```yaml
 PipelineRunnerSettings:
-  ConfigurationVersion: 0.2
-  PipelineRunnerVersion: 1.0.0
+  ConfigurationVersion: 0.5
+  PipelineRunnerVersion: 0.0.5
   Engine: DscV3
   Target: WinRM
   Reboot: Ignore
@@ -212,8 +216,8 @@ remote resource restarts and waits anyway, and a local one continues without res
 
 ```yaml
 PipelineRunnerSettings:
-  ConfigurationVersion: 0.2
-  PipelineRunnerVersion: 1.0.0
+  ConfigurationVersion: 0.5
+  PipelineRunnerVersion: 0.0.5
   DSCResourceVersion: 2.0
   AllowExecutionScripts: true
 ```

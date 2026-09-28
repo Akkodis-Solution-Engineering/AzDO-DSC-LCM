@@ -30,6 +30,8 @@ Describe "Target/WinRM against a live WinRM listener" -Tag Integration, Remoting
     #   * an unreachable ComputerName surfaces as a throw rather than a silent $null session
 
     BeforeAll {
+        # Suites share one process; see Save-ProcessEnvironment for why this matters.
+        $script:ProcessEnvironment = Save-ProcessEnvironment
         $script:WinRMPath = (Get-FunctionPath 'WinRM.ps1').FullName
         $script:Target    = $env:COMPUTERNAME
 
@@ -40,6 +42,7 @@ Describe "Target/WinRM against a live WinRM listener" -Tag Integration, Remoting
     }
 
     AfterAll {
+        Restore-ProcessEnvironment -Snapshot $script:ProcessEnvironment
         foreach ($session in $script:OpenedSessions) {
             if ($null -ne $session.CimSession) {
                 Remove-CimSession -CimSession $session.CimSession -ErrorAction SilentlyContinue

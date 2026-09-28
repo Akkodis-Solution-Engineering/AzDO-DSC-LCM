@@ -21,6 +21,8 @@ if (-not $script:SecretsAvailable) {
 Describe "Credential/SecretManagement against a live SecretManagement vault" -Tag Integration, HostedIntegration {
 
     BeforeAll {
+        # Suites share one process; see Save-ProcessEnvironment for why this matters.
+        $script:ProcessEnvironment = Save-ProcessEnvironment
         $script:SecretManagementPath = (Get-FunctionPath 'SecretManagement.ps1').FullName
         $script:VaultName            = 'PipelineRunnerIntegration'
 
@@ -75,6 +77,7 @@ Describe "Credential/SecretManagement against a live SecretManagement vault" -Ta
     }
 
     AfterAll {
+        Restore-ProcessEnvironment -Snapshot $script:ProcessEnvironment
         if ($script:SecretsAvailable) {
             foreach ($name in @($script:CredentialSecretName, $script:SecureStringSecretName, $script:UnsupportedSecretName)) {
                 Remove-Secret -Name $name -Vault $script:VaultName -ErrorAction SilentlyContinue

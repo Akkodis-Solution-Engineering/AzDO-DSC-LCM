@@ -3,7 +3,7 @@ Function Sort-Hashtable {
     [Alias('sortDictionary')]
     Param (
         [Parameter(Mandatory=$true)]
-        [HashTable]
+        [System.Collections.IDictionary]
         $HashTable
     )
 
@@ -14,13 +14,15 @@ Function Sort-Hashtable {
     $OrderedHashTable = [Ordered]@{}
     foreach ($key in ($HashTable.Keys | Sort-Object)) {
         # If the value is a hashtable, recurse
-        if ($HashTable[$key] -is [hashtable]) {
+        if ($HashTable[$key] -is [System.Collections.IDictionary]) {
             $OrderedHashTable[$key] = Sort-Hashtable -HashTable $HashTable[$key]
             continue
         }
-        # If the value is an array of hashtables, recurse
-        if ($HashTable[$key] -is [array]) {
-            $OrderedHashTable[$key] = $HashTable[$key] | ForEach-Object { Sort-Hashtable -HashTable $_ }
+        # If the value is a collection, recurse into its hashtable items and keep the rest as-is.
+        if ($HashTable[$key] -is [System.Collections.IList]) {
+            $OrderedHashTable[$key] = @($HashTable[$key] | ForEach-Object {
+                if ($_ -is [System.Collections.IDictionary]) { Sort-Hashtable -HashTable $_ } else { $_ }
+            })
             continue
         }
         $OrderedHashTable[$key] = $HashTable[$key]

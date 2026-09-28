@@ -25,6 +25,7 @@ resources:
 
 - name: Configuration Git Permissions
   type: AzureDevOpsDsc/AzDoGitPermission
+  mergable: true
   dependsOn: 
     - AzureDevOpsDsc/AzDoGitRepository/Configuration Git Repository
   properties:

@@ -72,7 +72,8 @@ Describe "DSCStub Class Tests" -Tag Unit {
                     [HashTable]$source, 
                     [HashTable]$merge
                 )
-                return $merge
+                # The stub's properties are passed as -source, so they win.
+                return $source
             }
 
             $mergedResources = $stub.merge($dscResources)
@@ -173,7 +174,8 @@ Describe "DSCStub Class Tests" -Tag Unit {
                     [HashTable]$source, 
                     [HashTable]$merge
                 )
-                return $merge
+                # The stub's properties are passed as -source, so they win.
+                return $source
             }
 
             $mergedResources = $stub.merge($dscResources)

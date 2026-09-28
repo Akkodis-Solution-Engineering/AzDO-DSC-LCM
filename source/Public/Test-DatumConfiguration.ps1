@@ -18,7 +18,7 @@
     This example retrieves a Datum Configuration object and validates it using the Test-DatumConfiguration function.
 
 .NOTES
-    The function throws an error if the Datum Configuration is invalid or if any of the version checks fail. It also provides verbose output for each validation step and a warning if the Datum Configuration version is two or more minor versions behind the current PSDesiredStateConfiguration version.
+    The function throws an error if the Datum Configuration is invalid or if any of the version checks fail. It also provides verbose output for each validation step and a warning if the Datum Configuration version is two or more minor versions behind YAMLConfigurationCurrentVersion.
 
 #>
 function Test-DatumConfiguration {   
@@ -43,7 +43,7 @@ function Test-DatumConfiguration {
     }
 
     # Validate that the PipelineConfigurationMode contains the required properties.
-    if (-not $Datum.__Definition.PipelineConfigurationMode.ContainsKey('ConfigurationMode')) {
+    if (-not $Datum.__Definition.PipelineConfigurationMode.Contains('ConfigurationMode')) {
         throw "[Test-DatumConfiguration] The Datum Configuration PipelineConfigurationMode does not contain the ConfigurationMode property. The Datum Configuration is invalid and cannot be processed."
     }
 
@@ -52,14 +52,17 @@ function Test-DatumConfiguration {
         throw "[Test-DatumConfiguration] The Datum Configuration PipelineConfigurationMode ConfigurationMode property is not one of the allowed values: $($allowedConfigurationModes -join ', '). The Datum Configuration is invalid and cannot be processed."
     }
 
-    # Validate that the ConfigurationMode is one of the allowed values.
-    if (-not $Datum.__Definition.PipelineConfigurationMode.ContainsKey('ChangeWindows')) {
-        throw "[Test-DatumConfiguration] The Datum Configuration PipelineConfigurationMode does not contain the ChangeWindows property. The Datum Configuration is invalid and cannot be processed."
+    # ChangeWindows are only read in Scheduled mode, so only require them there.
+    $isScheduled = $Datum.__Definition.PipelineConfigurationMode.ConfigurationMode -eq 'Scheduled'
+    if ($isScheduled -and -not $Datum.__Definition.PipelineConfigurationMode.Contains('ChangeWindows')) {
+        throw "[Test-DatumConfiguration] The Datum Configuration PipelineConfigurationMode does not contain the ChangeWindows property, which is required when the ConfigurationMode is 'Scheduled'. The Datum Configuration is invalid and cannot be processed."
     }
 
     # Validate the properties of the ChangeWindows array.
-    ForEach ($ChangeWindow in $Datum.__Definition.PipelineConfigurationMode.ChangeWindows) {
-        if (-not $ChangeWindow.ContainsKey('StartTime') -or -not $ChangeWindow.ContainsKey('EndTime') -or -not $ChangeWindow.ContainsKey('ConfigurationMode')) {
+    # Any ChangeWindows present are still validated, so a mistake is caught before the mode is
+    # switched to Scheduled.
+    ForEach ($ChangeWindow in @($Datum.__Definition.PipelineConfigurationMode.ChangeWindows | Where-Object { $null -ne $_ })) {
+        if (-not $ChangeWindow.Contains('StartTime') -or -not $ChangeWindow.Contains('EndTime') -or -not $ChangeWindow.Contains('ConfigurationMode')) {
             throw "[Test-DatumConfiguration] Each ChangeWindow in the Datum Configuration PipelineConfigurationMode must contain StartTime, EndTime, and ConfigurationMode properties. The Datum Configuration is invalid and cannot be processed."
         }
         # Permitted values for ConfigurationMode in ChangeWindows are: ApplyOnly, Audit, Enforce
@@ -89,8 +92,7 @@ function Test-DatumConfiguration {
     }
 
     # Ensure that ChangeWindows contains at least one entry if ConfigurationMode is 'Scheduled'.
-    if ($Datum.__Definition.PipelineConfigurationMode.ConfigurationMode -eq 'Scheduled' -and
-        -not $Datum.__Definition.PipelineConfigurationMode.ChangeWindows.Count -ne 0) {
+    if ($isScheduled -and @($Datum.__Definition.PipelineConfigurationMode.ChangeWindows).Count -eq 0) {
         throw "[Test-DatumConfiguration] The Datum Configuration PipelineConfigurationMode ChangeWindows property must contain at least one entry when the ConfigurationMode is 'Scheduled'. The Datum Configuration is invalid and cannot be processed."
     }
 
@@ -127,29 +129,29 @@ function Test-DatumConfiguration {
     # Validate the Datum Configuration Versioning
     #
 
-    $supportedConfigurationMaxMajorVersion = $runnerConfig.YAMLConfigurationMaximumVersion.Major
-    $supportedConfigurationMaxMinorVersion = $runnerConfig.YAMLConfigurationMaximumVersion.Minor
-    $supportedConfigurationMinMajorVersion = $runnerConfig.YAMLConfigurationMinimumVersion.Major
-    $supportedConfigurationMinMinorVersion = $runnerConfig.YAMLConfigurationMinimumVersion.Minor
+    # Compare on major.minor only. [Version] comparison (not [decimal]) keeps 0.10 above 0.9.
+    $toMajorMinor = { param([Version]$v) [Version]::new($v.Major, [Math]::Max($v.Minor, 0)) }
 
-    $datumConfigurationMajorVersion = $runnerConfig.DatumConfigurationVersion.Major
-    $datumConfigurationMinorVersion = $runnerConfig.DatumConfigurationVersion.Minor
+    $maxSupportedVersion = & $toMajorMinor $runnerConfig.YAMLConfigurationMaximumVersion
+    $minSupportedVersion = & $toMajorMinor $runnerConfig.YAMLConfigurationMinimumVersion
+    $currentVersion      = & $toMajorMinor $runnerConfig.DatumConfigurationVersion
 
-    # Combine the Major and Minor versions as a decimal number to compare the versions.
-    $maxSupportedVersion = [decimal]::Parse("$supportedConfigurationMaxMajorVersion.$supportedConfigurationMaxMinorVersion")
-    $minSupportedVersion = [decimal]::Parse("$supportedConfigurationMinMajorVersion.$supportedConfigurationMinMinorVersion")
-
-    $currentVersion = [decimal]::Parse("$datumConfigurationMajorVersion.$datumConfigurationMinorVersion")
-    
     # Throw an error if the Datum Configuration Version is outside the valid range of the Datum Configuration Versions.
     if (($currentVersion -lt $minSupportedVersion) -or ($currentVersion -gt $maxSupportedVersion)) {
         throw "[Test-DatumConfiguration] The Datum Configuration Version $($runnerConfig.DatumConfigurationVersion) is outside the valid range ($($runnerConfig.YAMLConfigurationMinimumVersion) to $($runnerConfig.YAMLConfigurationMaximumVersion)). The Datum Configuration is invalid and cannot be processed."
     }
 
-    # Check if the Datum Configuration Version is two or more minor versions behind the current PSDesiredStateConfiguration version.
-    # If it is, write a warning.
-    if ($currentVersion -ge ($maxSupportedVersion - 0.2)) {
-        Write-Warning "[Test-DatumConfiguration] The Datum Configuration Version $($runnerConfig.DatumConfigurationVersion) is two or more minor versions behind the current PSDesiredStateConfiguration version $($runnerConfig.CurrentPSDesiredStateConfigurationVersion). Consider updating to a more recent version."
+    # Warn when the configuration is two or more minor versions behind the configuration version
+    # this release of the module is written for (or on an older major version).
+    $latestConfigurationVersion = $ModuleConfigurationData.YAMLConfigurationCurrentVersion -as [Version]
+    if ($null -ne $latestConfigurationVersion) {
+        $latestConfigurationVersion = & $toMajorMinor $latestConfigurationVersion
+        $isBehind = ($currentVersion.Major -lt $latestConfigurationVersion.Major) -or
+                    (($currentVersion.Major -eq $latestConfigurationVersion.Major) -and
+                     (($latestConfigurationVersion.Minor - $currentVersion.Minor) -ge 2))
+        if ($isBehind) {
+            Write-Warning "[Test-DatumConfiguration] The Datum Configuration Version $($runnerConfig.DatumConfigurationVersion) is two or more minor versions behind the current configuration version $latestConfigurationVersion. Consider updating the configuration."
+        }
     }
 
     #
@@ -174,8 +176,10 @@ function Test-DatumConfiguration {
     # neither of which was ever populated, so it was a permanent no-op ($x -lt $null is
     # always $false). Use the real installed version and the configured bounds, and warn
     # (rather than silently pass) when a bound cannot be determined.
-    $PipelineRunnerMinimumVersion = $ModuleConfigurationData.DSCResourceMinimumVersion -as [Version]
-    $PipelineRunnerMaximumVersion = $ModuleConfigurationData.DSCResourceMaximumVersion -as [Version]
+    # These are this module's own bounds (PipelineRunner*), not DSCResource*, which describe
+    # the DSC resource versions and would reject every 0.x release of this module.
+    $PipelineRunnerMinimumVersion = $ModuleConfigurationData.PipelineRunnerMinimumVersion -as [Version]
+    $PipelineRunnerMaximumVersion = $ModuleConfigurationData.PipelineRunnerMaximumVersion -as [Version]
 
     if (($null -eq $PipelineRunnerMinimumVersion) -or ($null -eq $PipelineRunnerMaximumVersion)) {
         Write-Warning "[Test-DatumConfiguration] The DSC.PipelineRunner.Akkodis minimum/maximum version bounds are not configured; skipping the DSC.PipelineRunner.Akkodis version check."

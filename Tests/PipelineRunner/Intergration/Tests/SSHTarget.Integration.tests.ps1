@@ -32,6 +32,8 @@ Describe "Target/SSH against a live sshd with a PowerShell subsystem" -Tag Integ
     #     action rather than a hand-written call
 
     BeforeAll {
+        # Suites share one process; see Save-ProcessEnvironment for why this matters.
+        $script:ProcessEnvironment = Save-ProcessEnvironment
         $script:SSHPath   = (Get-FunctionPath 'SSH.ps1').FullName
         $script:SshTarget = if ([string]::IsNullOrWhiteSpace($env:PIPELINERUNNER_SSH_TARGET)) { 'localhost' } else { $env:PIPELINERUNNER_SSH_TARGET }
 
@@ -46,6 +48,7 @@ Describe "Target/SSH against a live sshd with a PowerShell subsystem" -Tag Integ
     }
 
     AfterAll {
+        Restore-ProcessEnvironment -Snapshot $script:ProcessEnvironment
         foreach ($session in $script:OpenedSessions) {
             if ($null -ne $session.PSSession) {
                 Remove-PSSession -Session $session.PSSession -ErrorAction SilentlyContinue

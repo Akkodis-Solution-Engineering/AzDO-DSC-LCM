@@ -50,6 +50,7 @@ function ConvertTo-PipelineTask {
             ResourceCredential       = $Resource.resourceCredential
             ExecutionMethodOverride  = [string]$Resource.executionMethodOverride
             Mergable                 = $Resource.mergable
+            CompositeScope           = @($Resource.compositeScope)
         }
     }
 }

@@ -26,6 +26,11 @@ class DSC_Resource : DSCBaseResource {
     [bool] $mergable = $false
     [ExecutionMethod] $executionMethodOverride = 'None'
 
+    # Set by Expand-CompositeResources on a resource that came from a composite: one
+    # @{ Parameters; Variables } layer per enclosing composite, outermost first. Start-DscRunner
+    # applies the layers over the file's own scope while this resource runs.
+    hidden [object[]] $compositeScope = @()
+
     DSC_Resource([hashtable]$ht) {
 
         # Name, Type, Properties are mandatory

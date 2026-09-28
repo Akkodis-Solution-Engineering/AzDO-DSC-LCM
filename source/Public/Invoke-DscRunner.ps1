@@ -134,7 +134,7 @@ function Invoke-DscRunner {
         #
         # Read and validate the Datum Configuration
 
-        $DatumConfiguration = Get-Content -Path (Join-Path $DatumConfigurationPath 'datum.yml') | ConvertFrom-Yaml
+        $DatumConfiguration = Get-Content -Path (Join-Path $DatumConfigurationPath 'Datum.yml') | ConvertFrom-Yaml
         Test-DatumConfiguration -Datum @{ '__Definition' = $DatumConfiguration }
 
         #

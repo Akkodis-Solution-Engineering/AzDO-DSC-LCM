@@ -7,9 +7,11 @@ Describe "Expand-CompositeResources" -Tag Unit, PipelineRunner, Rules, Custom {
         $DSCConfigurationFile   = (Get-FunctionPath '000.DSCConfigurationFile.ps1').FullName
         $DSCBaseResource        = (Get-FunctionPath '001.DSCBaseResource.ps1').FullName
         $DSC_Resource           = (Get-FunctionPath '002.DSC_Resource.ps1').FullName
+        $DSCStub                = (Get-FunctionPath '003.DSCStub.ps1').FullName
         $DSCCompositeResource   = (Get-FunctionPath '004.DSCCompositeResource.ps1').FullName
 
         $mergePropertiesPath    = (Get-FunctionPath 'mergeProperties.ps1').FullName
+        $sortDictionaryPath     = (Get-FunctionPath 'sortDictionary.ps1').FullName
         $getDefaultValuesPath   = (Get-FunctionPath 'GetDefaultValues.ps1').FullName
         $setVariablesPath       = (Get-FunctionPath 'SetVariables.ps1').FullName
         $invokeCustomTaskPath   = (Get-FunctionPath 'Invoke-CustomTask.ps1').FullName
@@ -18,9 +20,11 @@ Describe "Expand-CompositeResources" -Tag Unit, PipelineRunner, Rules, Custom {
         . $DSCConfigurationFile
         . $DSCBaseResource
         . $DSC_Resource
+        . $DSCStub
         . $DSCCompositeResource
 
         . $mergePropertiesPath
+        . $sortDictionaryPath
         . $getDefaultValuesPath
         . $setVariablesPath
         . $invokeCustomTaskPath
@@ -36,7 +40,8 @@ Describe "Expand-CompositeResources" -Tag Unit, PipelineRunner, Rules, Custom {
         # happens in production.
         Mock -CommandName Invoke-CustomTask -MockWith {
             param($Tasks, $CustomTaskName)
-            return (. $customTaskFilePath -PipelineResources $Tasks)
+            $taskPath = (Get-FunctionPath "$CustomTaskName.ps1").FullName
+            return (. $taskPath -PipelineResources $Tasks)
         }
 
         # Builds a real [DSCCompositeResource] backed by an (empty, on-disk) linked file, then
@@ -49,7 +54,8 @@ Describe "Expand-CompositeResources" -Tag Unit, PipelineRunner, Rules, Custom {
                 [string]$Type = 'Composite/Type',
                 [object[]]$InnerResources = @(),
                 [hashtable]$Parameters = $null,
-                [hashtable]$Variables = $null
+                [hashtable]$Variables = $null,
+                [hashtable]$Properties = @{}
             )
 
             $compositeDirectory = Join-Path $TestDrive ([guid]::NewGuid().ToString())
@@ -58,7 +64,7 @@ Describe "Expand-CompositeResources" -Tag Unit, PipelineRunner, Rules, Custom {
             $linkedFileName = Join-Path $compositeDirectory "$Name.yml"
             New-Item -ItemType File -Path $linkedFileName -Force | Out-Null
 
-            $task = @{ name = $Name; type = $Type; properties = @{} }
+            $task = @{ name = $Name; type = $Type; properties = $Properties }
             $composite = [DSCCompositeResource]::new($Name, $compositeDirectory, $task)
 
             $composite.resource.resources  = $InnerResources
@@ -132,42 +138,66 @@ Describe "Expand-CompositeResources" -Tag Unit, PipelineRunner, Rules, Custom {
         $result[0].name | Should -Be 'InnerMost'
     }
 
-    It "Folds a composite's own parameter defaults into the shared parameters scope" {
-        $parameters = @{}
-        $variables  = @{}
-
-        $composite = New-TestCompositeResource -InnerResources @() -Parameters @{
+    It "Tags inner resources with the composite's parameter defaults, overridden by the node's properties" {
+        $inner = [DSC_Resource]::new(@{ name = 'Inner1'; type = 'Module/Resource'; properties = @{} })
+        $composite = New-TestCompositeResource -InnerResources @($inner) -Parameters @{
             Greeting = @{ defaultValue = 'Hello' }
-        }
+            Target   = @{ defaultValue = 'World' }
+        } -Properties @{ Target = 'Contoso' }
 
-        . $customTaskFilePath -PipelineResources @($composite) | Out-Null
+        $result = . $customTaskFilePath -PipelineResources @($composite)
 
-        $parameters['Greeting'] | Should -Be 'Hello'
+        @($result[0].compositeScope).Count | Should -Be 1
+        $result[0].compositeScope[0].Parameters['Greeting'] | Should -Be 'Hello'
+        $result[0].compositeScope[0].Parameters['Target'] | Should -Be 'Contoso'
     }
 
-    It "Folds a composite's own variables into the shared variables scope" {
-        $parameters = @{}
-        $variables  = @{}
+    It "Tags inner resources with the composite's own variables" {
+        $inner = [DSC_Resource]::new(@{ name = 'Inner1'; type = 'Module/Resource'; properties = @{} })
+        $composite = New-TestCompositeResource -InnerResources @($inner) -Variables @{ Environment = 'Production' }
 
-        $composite = New-TestCompositeResource -InnerResources @() -Variables @{
-            Environment = 'Production'
-        }
+        $result = . $customTaskFilePath -PipelineResources @($composite)
 
-        . $customTaskFilePath -PipelineResources @($composite) | Out-Null
-
-        $variables['Environment'] | Should -Be 'Production'
+        $result[0].compositeScope[0].Variables['Environment'] | Should -Be 'Production'
     }
 
-    It "Does not touch the shared scope when the composite declares no parameters or variables" {
+    It "Does not touch the shared scope" {
         $parameters = @{ Existing = 'Value' }
         $variables  = @{ Existing = 'Value' }
+        $inner = [DSC_Resource]::new(@{ name = 'Inner1'; type = 'Module/Resource'; properties = @{} })
 
-        $composite = New-TestCompositeResource -InnerResources @()
+        $composite = New-TestCompositeResource -InnerResources @($inner) -Parameters @{
+            Greeting = @{ defaultValue = 'Hello' }
+        } -Variables @{ Environment = 'Production' }
 
         . $customTaskFilePath -PipelineResources @($composite) | Out-Null
 
         $parameters.Keys.Count | Should -Be 1
         $variables.Keys.Count | Should -Be 1
+    }
+
+    It "Orders nested composite layers outermost first" {
+        $innerMost = [DSC_Resource]::new(@{ name = 'InnerMost'; type = 'Module/Resource'; properties = @{} })
+        $nested = New-TestCompositeResource -Name 'Nested' -InnerResources @($innerMost) -Properties @{ Level = 'Nested' }
+        $outer  = New-TestCompositeResource -Name 'Outer' -InnerResources @($nested) -Properties @{ Level = 'Outer' }
+
+        $result = . $customTaskFilePath -PipelineResources @($outer)
+
+        @($result[0].compositeScope).Count | Should -Be 2
+        $result[0].compositeScope[0].Parameters['Level'] | Should -Be 'Outer'
+        $result[0].compositeScope[1].Parameters['Level'] | Should -Be 'Nested'
+    }
+
+    It "Merges stubs declared inside the composite file" {
+        $target = [DSC_Resource]::new(@{ name = 'Target'; type = 'Module/Resource'; mergable = $true; properties = @{ A = '1' } })
+        $stub = [DSCStub]::new(@{ name = 'Stub'; type = 'Module/Resource'; merge_with = 'Module/Resource/Target'; properties = @{ B = '2' } })
+        $composite = New-TestCompositeResource -InnerResources @($stub, $target)
+
+        $result = . $customTaskFilePath -PipelineResources @($composite)
+
+        @($result).Count | Should -Be 1
+        $result[0].properties['A'] | Should -Be '1'
+        $result[0].properties['B'] | Should -Be '2'
     }
 
 }

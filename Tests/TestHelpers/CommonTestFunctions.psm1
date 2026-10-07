@@ -416,11 +416,10 @@ can.
 See Get-WinRMSkipReason for why this is a module command rather than a variable in the test file.
 
 The suite drives the BUILT module's Invoke-DscPipelineRunner against a real Azure DevOps
-organization, signing in through GitHub Actions OIDC as a user-assigned managed identity
-(AuthenticationType 'WorkloadIdentity'). Beyond what the end-to-end pipeline suite needs, that
-takes AzureDevOpsDscNative, the organization and identity to use (AZDO_ORGANIZATION,
-AZURE_TENANT_ID, AZURE_CLIENT_ID) and an OIDC token endpoint, which GitHub only provides to a job
-granted 'id-token: write' (and never to a pull request from a fork).
+organization, signing in as the machine's managed identity (AuthenticationType
+'ManagedIdentity'). Beyond what the end-to-end pipeline suite needs, that takes
+AzureDevOpsDscNative, the organization to use (AZUREDEVOPSORG) and an Azure Arc-enabled machine,
+whose agent publishes the managed identity endpoint in IDENTITY_ENDPOINT.
 #>
 function Get-AzureDevOpsLiveSkipReason {
     [CmdletBinding()]
@@ -435,14 +434,12 @@ function Get-AzureDevOpsLiveSkipReason {
         }
     }
 
-    foreach ($name in 'AZDO_ORGANIZATION', 'AZURE_TENANT_ID', 'AZURE_CLIENT_ID') {
-        if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
-            return "$name is not set; it names the Azure DevOps organization / managed identity to sign in as."
-        }
+    if ([string]::IsNullOrWhiteSpace($env:AZUREDEVOPSORG)) {
+        return 'AZUREDEVOPSORG is not set; it names the Azure DevOps organization to test against.'
     }
 
-    if ([string]::IsNullOrWhiteSpace($env:ACTIONS_ID_TOKEN_REQUEST_URL)) {
-        return "No GitHub Actions OIDC token endpoint (ACTIONS_ID_TOKEN_REQUEST_URL); the job needs 'permissions: id-token: write'."
+    if ([string]::IsNullOrWhiteSpace($env:IDENTITY_ENDPOINT)) {
+        return 'No managed identity endpoint (IDENTITY_ENDPOINT); this is not an Azure Arc-enabled machine.'
     }
 
     if (-not (Get-BuiltModuleManifest)) {

@@ -31,20 +31,10 @@ Specifies the Just-In-Time (JIT) access token. This parameter is mandatory.
 Specifies the pipeline runner mode to use. Valid values are 'ApplyOnly', 'Audit', and 'Enforce'. This parameter is optional; if not provided, the mode will be determined from the Datum configuration.
 
 .PARAMETER AuthenticationType
-Specifies the authentication type to use. Valid values are 'ManagedIdentity', 'PAT' and
-'WorkloadIdentity'. The default value is 'ManagedIdentity'. 'WorkloadIdentity' signs in through
-GitHub Actions OIDC (the job needs 'id-token: write') as the application or user-assigned
-managed identity named by -TenantId and -ClientId.
+Specifies the authentication type to use. Valid values are 'ManagedIdentity' and 'PAT'. The default value is 'ManagedIdentity'.
 
 .PARAMETER PATToken
 Specifies the Personal Access Token (PAT). This parameter is mandatory when AuthenticationType is set to 'PAT' and must be a valid 52-character alphanumeric string.
-
-.PARAMETER TenantId
-The Entra tenant of the identity to sign in as. Mandatory when AuthenticationType is 'WorkloadIdentity'.
-
-.PARAMETER ClientId
-The client ID of the application or user-assigned managed identity whose federated credential
-trusts this GitHub repository. Mandatory when AuthenticationType is 'WorkloadIdentity'.
 
 .PARAMETER ReportPath
 Specifies the path to the report file. This parameter is optional and must be a valid directory path.
@@ -82,54 +72,39 @@ function Invoke-DscPipelineRunner {
     param(
         [Parameter(Mandatory, ParameterSetName='Default')]
         [Parameter(Mandatory, ParameterSetName='PAT')]
-        [Parameter(Mandatory, ParameterSetName='WorkloadIdentity')]
         [String]$AzureDevopsOrganizationName,
 
         [Parameter(Mandatory, ParameterSetName='Default')]
         [Parameter(Mandatory, ParameterSetName='PAT')]
-        [Parameter(Mandatory, ParameterSetName='WorkloadIdentity')]
         [ValidateScript({ Test-Path -LiteralPath $_ -PathType Container })]
         [String]$exportConfigDir,
 
         [Parameter(Mandatory, ParameterSetName='Default')]
         [Parameter(Mandatory, ParameterSetName='PAT')]
-        [Parameter(Mandatory, ParameterSetName='WorkloadIdentity')]
         [String]$ConfigurationSourcePath,
 
         [Parameter(ParameterSetName='Default')]
         [Parameter(ParameterSetName='PAT')]
-        [Parameter(ParameterSetName='WorkloadIdentity')]
         [String]$ConfigurationRevision,
 
         [Parameter(Mandatory, ParameterSetName='Default')]
         [Parameter(Mandatory, ParameterSetName='PAT')]
-        [Parameter(Mandatory, ParameterSetName='WorkloadIdentity')]
         [String]$JITToken,
 
         [Parameter(ParameterSetName='Default')]
         [Parameter(ParameterSetName='PAT')]
-        [Parameter(ParameterSetName='WorkloadIdentity')]
         [ValidateSet("ApplyOnly", "Audit", "Enforce")]
         [AllowEmptyString()]
         [String]$ConfigurationMode,
 
         [Parameter(ParameterSetName='Default')]
         [Parameter(ParameterSetName='PAT')]
-        [Parameter(ParameterSetName='WorkloadIdentity')]
-        [ValidateSet('ManagedIdentity', 'PAT', 'WorkloadIdentity')]
+        [ValidateSet('ManagedIdentity', 'PAT')]
         [String]$AuthenticationType='ManagedIdentity',
 
         [Parameter(Mandatory, ParameterSetName='PAT')]
         [ValidateScript({$_ -match '^[a-zA-Z0-9]{52}$'})]
         [String]$PATToken,
-
-        # Workload identity federation from GitHub Actions OIDC: a GitHub-hosted runner signs in
-        # as an Entra application or user-assigned managed identity that trusts this repository.
-        [Parameter(Mandatory, ParameterSetName='WorkloadIdentity')]
-        [String]$TenantId,
-
-        [Parameter(Mandatory, ParameterSetName='WorkloadIdentity')]
-        [String]$ClientId,
 
         [Parameter()]
         [ValidateScript({Test-Path -Path $_ -PathType Container})]
@@ -168,8 +143,6 @@ function Invoke-DscPipelineRunner {
 
     if ($AuthenticationType -eq 'PAT') {
         New-AzDoAuthenticationProvider -OrganizationName $AzureDevopsOrganizationName -PersonalAccessToken $PATToken
-    } elseif ($AuthenticationType -eq 'WorkloadIdentity') {
-        New-AzDoAuthenticationProvider -OrganizationName $AzureDevopsOrganizationName -TenantId $TenantId -ClientId $ClientId -useGitHubActionsOIDC
     } elseif ($AuthenticationType -eq 'ManagedIdentity') {
         New-AzDoAuthenticationProvider -OrganizationName $AzureDevopsOrganizationName -useManagedIdentity
     }

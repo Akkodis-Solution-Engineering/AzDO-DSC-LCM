@@ -93,9 +93,6 @@ jobs:
     needs: validate
     uses: ./.github/workflows/Integration-Hosted.yml
     secrets: inherit
-    permissions:
-      contents: read
-      id-token: write   # GitHub Actions OIDC sign-in for the live Azure DevOps suite
 
   package:
     name: Build and Package (local artifact only)

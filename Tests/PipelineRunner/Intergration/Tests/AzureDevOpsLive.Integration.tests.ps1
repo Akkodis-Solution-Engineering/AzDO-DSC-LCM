@@ -1,10 +1,9 @@
 # The built module's Azure DevOps entry point, end to end against a REAL Azure DevOps
 # organization through the AzureDevOpsDscNative resource module - no mocks anywhere.
 #
-# Invoke-DscPipelineRunner signs in with AuthenticationType 'WorkloadIdentity': GitHub Actions
-# OIDC, exchanged for a token of the user-assigned managed identity named by AZURE_TENANT_ID /
-# AZURE_CLIENT_ID, which must be a member of AZDO_ORGANIZATION allowed to create and delete
-# projects. Each run works in its own throwaway project:
+# Invoke-DscPipelineRunner signs in with AuthenticationType 'ManagedIdentity' as the Azure
+# Arc-enabled runner's managed identity, which must be a member of AZUREDEVOPSORG allowed to
+# create and delete projects. Each run works in its own throwaway project:
 #
 #   * AzDoProject       - lcm-ci-<run>-<attempt>
 #   * AzDoGitRepository - a repository inside it, dependsOn the project
@@ -135,8 +134,7 @@ $repository
             function Invoke-AzDoRun {
                 param([Parameter(Mandatory)][ValidateSet('Audit', 'Enforce')][string]$ConfigurationMode)
                 $runErrors = $null
-                $result = Invoke-DscPipelineRunner -AzureDevopsOrganizationName $env:AZDO_ORGANIZATION `
-                    -AuthenticationType WorkloadIdentity -TenantId $env:AZURE_TENANT_ID -ClientId $env:AZURE_CLIENT_ID `
+                $result = Invoke-DscPipelineRunner -AzureDevopsOrganizationName $env:AZUREDEVOPSORG -AuthenticationType ManagedIdentity `
                     -JITToken 'unused-local-configuration-source' `
                     -exportConfigDir $script:ExportDirectory -ConfigurationSourcePath $script:SourceDirectory `
                     -ConfigurationMode $ConfigurationMode -Engine DscV2 -ErrorAction SilentlyContinue -ErrorVariable runErrors

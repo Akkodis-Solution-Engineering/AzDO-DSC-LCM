@@ -5,7 +5,11 @@ param(
 
     # Narrows an Integration run to these tags (e.g. 'HostedIntegration', the suites that do not
     # need a Windows host). Defaults to every Integration test.
-    [string[]]$Tag = @('Integration')
+    [string[]]$Tag = @('Integration'),
+
+    # Leaves these tags out of an Integration run (e.g. 'AzureDevOpsLive', which only runs on the
+    # Azure Arc-enabled self-hosted runner).
+    [string[]]$ExcludeTag = @()
 )
 # Import the Test Helper Module
 $TestHelper = Import-Module -Name ".\Tests\TestHelpers\CommonTestFunctions.psm1" -PassThru
@@ -34,7 +38,7 @@ if ($type -eq 'Unit') {
 } else {
     $config.Filter = @{
         Tag = $Tag
-        ExcludeTag = 'Skip', 'Unit'
+        ExcludeTag = @('Skip', 'Unit') + $ExcludeTag
     }
 }
 

@@ -3,31 +3,31 @@
 # Release.yml.
 #
 #   * windows - builds the module, runs the DSC v2 / DSC v3 smoke tests and the DSC v3 document
-#     check, then every Integration suite: WinRM loopback, the real Invoke-DscResource lifecycle,
-#     the built module's pipeline end to end against real PSDscResources resources
-#     (PipelineEndToEnd.Integration.tests.ps1) and against a live Azure DevOps organization through
-#     AzureDevOpsDscNative (AzureDevOpsLive.Integration.tests.ps1), SSH loopback, a live
+#     check, then every Integration suite but the live Azure DevOps one: WinRM loopback, the real
+#     Invoke-DscResource lifecycle, the built module's pipeline end to end against real
+#     PSDscResources resources (PipelineEndToEnd.Integration.tests.ps1), SSH loopback, a live
 #     SecretStore vault and the runner-level suites.
 #   * linux - builds the module and runs the suites that do not need a Windows host
 #     ('HostedIntegration': SSH loopback, live vault, notify/using(), conditions, function
 #     language), proving they hold on Linux too.
+#   * azure-devops-live - the one job NOT on a GitHub-hosted runner: the built module's
+#     Invoke-DscPipelineRunner against a live Azure DevOps organization through AzureDevOpsDscNative
+#     (AzureDevOpsLive.Integration.tests.ps1). It runs on the Azure Arc-enabled self-hosted
+#     Windows runner, because it signs in as that machine's managed identity.
 #
 # scripts/Initialize-HostedIntegrationRunner.ps1 provisions the runner (SecretManagement +
 # SecretStore, WinRM, dsc, a loopback sshd with a PowerShell subsystem). It refuses to run off a
 # GitHub-hosted runner, because it resets SecretStore and changes machine-wide sshd/PATH settings.
 # PIPELINERUNNER_REQUIRE_INTEGRATION_DEPENDENCIES then makes tests.ps1 fail on any skipped test.
 #
-# The live Azure DevOps suite signs in through GitHub Actions OIDC as a user-assigned managed
-# identity (AuthenticationType 'WorkloadIdentity'), so no secret is stored. It needs these
-# repository variables (Settings > Secrets and variables > Actions > Variables):
-#
-#   AZDO_ORGANIZATION - the Azure DevOps organization the throwaway projects are created in
-#   AZURE_TENANT_ID   - the Entra tenant of the managed identity
-#   AZURE_CLIENT_ID   - the managed identity's client ID
-#
-# The identity needs a federated credential trusting this repository's workflows, and must be a
-# member of the organization allowed to create and delete projects. GitHub never issues an OIDC
-# token to a pull request from a fork, so the suite (and with it this job) fails there.
+# The live Azure DevOps suite signs in with AuthenticationType 'ManagedIdentity' as the Arc
+# machine's managed identity (AzureDevOpsDscNative reads IDENTITY_ENDPOINT, which the Arc agent
+# sets), so no secret is stored. That identity must be a member of the organization allowed to
+# create and delete projects, and the runner's service account must be able to read the Arc
+# agent's token challenge files (an Administrator, or in 'Hybrid agent extension applications').
+# The organization comes from AZUREDEVOPSORG: the machine's environment variable, or the
+# AZUREDEVOPSORG repository variable when one is set. Pull requests from forks never reach this
+# job, since it would run their code with that identity.
 name: Integration Tests (GitHub-hosted)
 
 on:
@@ -46,14 +46,13 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: read
-      id-token: write   # GitHub Actions OIDC sign-in for the live Azure DevOps suite
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Install PowerShell dependencies
         shell: pwsh
-        run: Install-Module Datum, Datum.InvokeCommand, powershell-yaml, PSDesiredStateConfiguration, PSDscResources, AzureDevOpsDscNative -Force
+        run: Install-Module Datum, Datum.InvokeCommand, powershell-yaml, PSDesiredStateConfiguration, PSDscResources -Force
 
       - name: Provision integration dependencies
         shell: pwsh
@@ -81,10 +80,7 @@ jobs:
         shell: pwsh
         env:
           PIPELINERUNNER_REQUIRE_INTEGRATION_DEPENDENCIES: 'true'
-          AZDO_ORGANIZATION: ${{ vars.AZDO_ORGANIZATION }}
-          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-        run: ./tests.ps1 -type Integration
+        run: ./tests.ps1 -type Integration -ExcludeTag AzureDevOpsLive
 
   linux:
     name: Integration on ubuntu-latest
@@ -112,3 +108,34 @@ jobs:
         env:
           PIPELINERUNNER_REQUIRE_INTEGRATION_DEPENDENCIES: 'true'
         run: ./tests.ps1 -type Integration -Tag HostedIntegration
+
+  azure-devops-live:
+    name: Live Azure DevOps on the Azure Arc self-hosted runner
+    runs-on: [self-hosted, windows]
+    # Never run a fork's code on the runner that holds the managed identity.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # A persistent machine: install for the runner's account only, and leave everything else
+      # (SecretStore, WinRM, sshd) alone - Initialize-HostedIntegrationRunner.ps1 is not run here.
+      - name: Install PowerShell dependencies
+        shell: pwsh
+        run: Install-Module Datum, Datum.InvokeCommand, powershell-yaml, PSDesiredStateConfiguration, AzureDevOpsDscNative -Scope CurrentUser -Force
+
+      - name: Build the module
+        shell: pwsh
+        run: ./Build.ps1 -ResolveDependency -Tasks build
+
+      - name: Run the live Azure DevOps integration tests
+        shell: pwsh
+        env:
+          PIPELINERUNNER_REQUIRE_INTEGRATION_DEPENDENCIES: 'true'
+          AZUREDEVOPSORG_OVERRIDE: ${{ vars.AZUREDEVOPSORG }}
+        run: |
+          # The machine's AZUREDEVOPSORG, unless the repository variable overrides it.
+          if ($env:AZUREDEVOPSORG_OVERRIDE) { $env:AZUREDEVOPSORG = $env:AZUREDEVOPSORG_OVERRIDE }
+          ./tests.ps1 -type Integration -Tag AzureDevOpsLive

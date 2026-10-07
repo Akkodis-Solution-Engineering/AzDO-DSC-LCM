@@ -12,8 +12,3 @@ jobs:
   integration:
     uses: ./.github/workflows/Integration-Hosted.yml
     secrets: inherit
-    # A called workflow can only use the permissions its caller grants; id-token is for the live
-    # Azure DevOps suite's GitHub Actions OIDC sign-in.
-    permissions:
-      contents: read
-      id-token: write

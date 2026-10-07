@@ -14,10 +14,9 @@ every consumer. If the module is not installed a clear, actionable error is thro
 .PARAMETER Context
 A hashtable. Recognized keys:
   OrganizationName   - the Azure DevOps organization (required).
-  AuthenticationType - 'ManagedIdentity' (default), 'PAT' or 'WorkloadIdentity'.
+  AuthenticationType - 'ManagedIdentity' (default) or 'PAT'. ManagedIdentity works on Azure VMs
+                       and on Azure Arc-enabled machines.
   PATToken           - the Personal Access Token, required when AuthenticationType = 'PAT'.
-  TenantId, ClientId - the identity to sign in as through GitHub Actions OIDC, required when
-                       AuthenticationType = 'WorkloadIdentity'.
 
 .OUTPUTS
 $null (the provider registers an ambient session as a side effect).
@@ -55,19 +54,12 @@ switch ($authenticationType) {
         Write-Verbose "[Actions/Connect/AzureDevOps] Authenticating to '$organizationName' with a Personal Access Token."
         New-AzDoAuthenticationProvider -OrganizationName $organizationName -PersonalAccessToken $Context.PATToken
     }
-    'WorkloadIdentity' {
-        if ([string]::IsNullOrWhiteSpace($Context.TenantId) -or [string]::IsNullOrWhiteSpace($Context.ClientId)) {
-            throw "[Actions/Connect/AzureDevOps] AuthenticationType 'WorkloadIdentity' requires 'TenantId' and 'ClientId' in the action context."
-        }
-        Write-Verbose "[Actions/Connect/AzureDevOps] Authenticating to '$organizationName' with GitHub Actions OIDC as client '$($Context.ClientId)'."
-        New-AzDoAuthenticationProvider -OrganizationName $organizationName -TenantId $Context.TenantId -ClientId $Context.ClientId -useGitHubActionsOIDC
-    }
     'ManagedIdentity' {
         Write-Verbose "[Actions/Connect/AzureDevOps] Authenticating to '$organizationName' with a Managed Identity."
         New-AzDoAuthenticationProvider -OrganizationName $organizationName -useManagedIdentity
     }
     default {
-        throw "[Actions/Connect/AzureDevOps] Unsupported AuthenticationType '$authenticationType'. Use 'ManagedIdentity', 'PAT' or 'WorkloadIdentity'."
+        throw "[Actions/Connect/AzureDevOps] Unsupported AuthenticationType '$authenticationType'. Use 'ManagedIdentity' or 'PAT'."
     }
 }
 

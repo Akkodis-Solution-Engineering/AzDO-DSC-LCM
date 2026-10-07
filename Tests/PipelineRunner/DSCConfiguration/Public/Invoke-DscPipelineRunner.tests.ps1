@@ -14,7 +14,7 @@ Describe "Invoke-DscPipelineRunner Function Tests" -Tag Unit {
         # are loaded in this test, so the commands are declared as stubs here purely so Pester's
         # Mock has something to intercept.
         function Import-AzureDevOpsDscCommon { }
-        function New-AzDoAuthenticationProvider { param($OrganizationName, $PersonalAccessToken, [switch]$useManagedIdentity, $TenantId, $ClientId, [switch]$useGitHubActionsOIDC) }
+        function New-AzDoAuthenticationProvider { param($OrganizationName, $PersonalAccessToken, [switch]$useManagedIdentity) }
         function Invoke-DscRunner { param($exportConfigDir, $ConfigurationSourcePath, $ConfigurationRevision, $ConfigurationMode, $ReportPath, [switch]$ContinueOnError, $Engine, $EngineVersion, [switch]$FailOnError, [switch]$KeepTemporaryDirectory) }
 
         Mock -CommandName Import-AzureDevOpsDscCommon
@@ -54,14 +54,6 @@ Describe "Invoke-DscPipelineRunner Function Tests" -Tag Unit {
 
             Should -Invoke New-AzDoAuthenticationProvider -Exactly 1 -ParameterFilter {
                 $OrganizationName -eq "MyOrg" -and $PersonalAccessToken -eq $validPat
-            }
-        }
-
-        It "should sign in through GitHub Actions OIDC when -AuthenticationType 'WorkloadIdentity' is supplied" {
-            Invoke-DscPipelineRunner -AzureDevopsOrganizationName "MyOrg" -exportConfigDir $exportConfigDir -ConfigurationSourcePath $ConfigurationSourcePath -JITToken "mockToken" -AuthenticationType "WorkloadIdentity" -TenantId "tenant" -ClientId "client"
-
-            Should -Invoke New-AzDoAuthenticationProvider -Exactly 1 -ParameterFilter {
-                $OrganizationName -eq "MyOrg" -and $TenantId -eq "tenant" -and $ClientId -eq "client" -and $useGitHubActionsOIDC
             }
         }
     }

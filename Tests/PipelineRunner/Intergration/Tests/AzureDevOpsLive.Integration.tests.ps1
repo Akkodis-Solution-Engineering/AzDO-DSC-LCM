@@ -131,20 +131,49 @@ $repository
 "@
             }
 
+            # GitHub's log viewer folds a failed test's message away, so every run also prints
+            # what each resource did - the cause of a failure is then readable straight from
+            # the job log.
             function Invoke-AzDoRun {
                 param([Parameter(Mandatory)][ValidateSet('Audit', 'Enforce')][string]$ConfigurationMode)
                 $runErrors = $null
-                $result = Invoke-DscPipelineRunner -AzureDevopsOrganizationName $env:AZUREDEVOPSORG -AuthenticationType ManagedIdentity `
-                    -JITToken 'unused-local-configuration-source' `
-                    -exportConfigDir $script:ExportDirectory -ConfigurationSourcePath $script:SourceDirectory `
-                    -ConfigurationMode $ConfigurationMode -Engine DscV2 -ErrorAction SilentlyContinue -ErrorVariable runErrors
+                try {
+                    $result = Invoke-DscPipelineRunner -AzureDevopsOrganizationName $env:AZUREDEVOPSORG -AuthenticationType ManagedIdentity `
+                        -JITToken 'unused-local-configuration-source' `
+                        -exportConfigDir $script:ExportDirectory -ConfigurationSourcePath $script:SourceDirectory `
+                        -ConfigurationMode $ConfigurationMode -Engine DscV2 -ErrorAction SilentlyContinue -ErrorVariable runErrors
+                }
+                catch {
+                    Write-Host "[AzureDevOpsLive.Integration] $ConfigurationMode run threw: $($_.Exception.Message)"
+                    Write-Host $_.ScriptStackTrace
+                    throw
+                }
+
+                Write-Host "[AzureDevOpsLive.Integration] $ConfigurationMode run: Status=$($result.Status) Configurations=$($result.TotalConfigurations) Pass=$($result.PassCount) Fail=$($result.FailCount) Skip=$($result.SkipCount)"
+                foreach ($configuration in @($result.Configurations)) {
+                    foreach ($resource in @($configuration.Results)) {
+                        Write-Host "[AzureDevOpsLive.Integration]   [$($resource.Status)] $($resource.InstanceName) $($resource.ErrorMessage)"
+                    }
+                }
+                foreach ($runError in @($runErrors)) {
+                    Write-Host "[AzureDevOpsLive.Integration]   error: $runError"
+                }
+
                 [pscustomobject]@{ Result = $result; Errors = @($runErrors) }
             }
 
             function Invoke-AzDoGet {
                 param([Parameter(Mandatory)][string]$Name, [Parameter(Mandatory)][hashtable]$Property)
                 $engineActionPath = Join-Path $script:Module.ModuleBase 'Actions/Engine/DscV2.ps1'
-                (& $engineActionPath -Context @{ Method = 'Get'; ModuleName = 'AzureDevOpsDscNative'; Name = $Name; Property = $Property }).Raw
+                try {
+                    $raw = (& $engineActionPath -Context @{ Method = 'Get'; ModuleName = 'AzureDevOpsDscNative'; Name = $Name; Property = $Property }).Raw
+                }
+                catch {
+                    Write-Host "[AzureDevOpsLive.Integration] Get $Name threw: $($_.Exception.Message)"
+                    throw
+                }
+                Write-Host "[AzureDevOpsLive.Integration] Get $Name returned: $($raw | ConvertTo-Json -Depth 3 -Compress -WarningAction SilentlyContinue)"
+                $raw
             }
 
             Set-AzDoConfiguration -Ensure Present
@@ -181,7 +210,6 @@ $repository
 
         $run = Invoke-AzDoRun -ConfigurationMode Enforce
 
-        $run.Errors | ForEach-Object { Write-Host "[AzureDevOpsLive.Integration] runner error: $_" }
         $run.Result.FailCount | Should -Be 0
         $run.Result.PassCount | Should -Be 2
         @($run.Errors | Where-Object { "$_" -like "*'Get' method failed*" }) | Should -BeNullOrEmpty

@@ -19,6 +19,12 @@ name: Integration Tests (GitHub-hosted)
 on:
   workflow_dispatch:
   workflow_call:
+  # TEMPORARY: lets the hosted-integration-tests branch run this workflow directly, on push and
+  # in its pull request, while the hosted setup is being proven. Remove both triggers once it is
+  # green - Main/Development.IntergrationTests.yml and Release.yml call it via workflow_call.
+  push:
+    branches: [ "hosted-integration-tests" ]
+  pull_request:
 
 jobs:
   windows:

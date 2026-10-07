@@ -22,16 +22,17 @@
     This function requires the 'DSC.PipelineRunner.Akkodis', 'powershell-yaml', 'datum', and 'datum.invokecommand' modules to be installed and available.
 #>
 Function DatumConfigurationScriptBlock {
-    param($OutputPath, $configurationPath, [switch]$isTest)
+    param($OutputPath, $configurationPath, [string]$ModulePath, [switch]$isTest)
 
     # Prevent the script from running if the DatumConfigurationScriptBlock function is not being run in a separate thread
     if (($MyInvocation.MyCommand.Name -eq 'DatumConfigurationScriptBlock') -and (-not $isTest)) {
         Throw "This function is intended to be used as a script block in a separate thread using the Build-DatumConfiguration function."
     }
 
-    # Import the YAML module for handling YAML files
-    # Import the Datum module for configuration data management
-    Import-Module 'DSC.PipelineRunner.Akkodis','powershell-yaml','datum','datum.invokecommand'
+    # Import this module - from the path of the copy the caller loaded when one is given, since it
+    # need not be on this runspace's PSModulePath - then the YAML and Datum modules.
+    $pipelineRunnerModule = if ($ModulePath) { $ModulePath } else { 'DSC.PipelineRunner.Akkodis' }
+    Import-Module $pipelineRunnerModule,'powershell-yaml','datum','datum.invokecommand'
 
     Write-Verbose "Modules for DSC.PipelineRunner.Akkodis, YAML, Datum and Datum.InvokeCommand have been imported"
 

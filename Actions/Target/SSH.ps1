@@ -52,6 +52,17 @@ $sessionParams = @{ HostName = [string]$Context.ComputerName; SSHTransport = $tr
 if ($Context.UserName)    { $sessionParams.UserName = [string]$Context.UserName }
 if ($Context.KeyFilePath) { $sessionParams.KeyFilePath = [string]$Context.KeyFilePath }
 
+# A pipeline has nobody to answer a password or host-key prompt, so ssh must fail instead of
+# waiting on one forever. -Options (PowerShell 7.3+) and -ConnectingTimeout (7.2+) are used when
+# this host's New-PSSession has them.
+$newPSSessionParameters = (Get-Command -Name New-PSSession).Parameters
+if ($newPSSessionParameters.ContainsKey('Options')) {
+    $sessionParams.Options = @{ BatchMode = 'yes' }
+}
+if ($newPSSessionParameters.ContainsKey('ConnectingTimeout')) {
+    $sessionParams.ConnectingTimeout = 60000
+}
+
 $psSession = New-PSSession @sessionParams
 
 return @{

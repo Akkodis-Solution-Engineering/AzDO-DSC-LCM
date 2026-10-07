@@ -20,6 +20,22 @@ Remove-Variable -Name TestPaths -Scope Global -ErrorAction SilentlyContinue
 
 Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)"
 
+# Pester 5 is required. Load it explicitly: autoload can pick Windows' in-box Pester 3.4, which has
+# no New-PesterConfiguration. Fall back to the copy Build.ps1 -ResolveDependency saves.
+if (-not (Get-Module -Name Pester -ListAvailable | Where-Object { $_.Version -ge [version]'5.0.0' })) {
+    $resolvedPester = Get-ChildItem -Path (Join-Path $PSScriptRoot 'output/RequiredModules/Pester') -Filter 'Pester.psd1' -Recurse -ErrorAction SilentlyContinue |
+        Sort-Object { [version]$_.Directory.Name } -Descending -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($resolvedPester) {
+        Import-Module -Name $resolvedPester.FullName -Force -ErrorAction Stop
+    }
+}
+if (-not (Get-Module -Name Pester | Where-Object { $_.Version -ge [version]'5.0.0' })) {
+    Get-Module -Name Pester | Remove-Module -Force
+    Import-Module -Name Pester -MinimumVersion 5.0.0 -ErrorAction Stop
+}
+Write-Host "Pester Version: $((Get-Module -Name Pester).Version)"
+
 $config = New-PesterConfiguration
 
 $config.Run.Path = ".\Tests\PipelineRunner"

@@ -20,19 +20,22 @@ Remove-Variable -Name TestPaths -Scope Global -ErrorAction SilentlyContinue
 
 Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)"
 
-# Pester 5 is required. Load it explicitly: autoload can pick Windows' in-box Pester 3.4, which has
-# no New-PesterConfiguration. Fall back to the copy Build.ps1 -ResolveDependency saves.
-if (-not (Get-Module -Name Pester -ListAvailable | Where-Object { $_.Version -ge [version]'5.0.0' })) {
-    $resolvedPester = Get-ChildItem -Path (Join-Path $PSScriptRoot 'output/RequiredModules/Pester') -Filter 'Pester.psd1' -Recurse -ErrorAction SilentlyContinue |
-        Sort-Object { [version]$_.Directory.Name } -Descending -ErrorAction SilentlyContinue |
-        Select-Object -First 1
-    if ($resolvedPester) {
-        Import-Module -Name $resolvedPester.FullName -Force -ErrorAction Stop
+# Pester 5 is required, and loaded explicitly: autoload can pick Windows' in-box Pester 3.4, which
+# has no New-PesterConfiguration, or Pester 6, which drops the CoverageGutters format used below.
+# Falls back to a Pester 5 that Build.ps1 -ResolveDependency saved.
+$isPester5 = { $_.Version -ge [version]'5.0.0' -and $_.Version -lt [version]'6.0.0' }
+Get-Module -Name Pester | Where-Object { -not (& $isPester5) } | Remove-Module -Force
+if (-not (Get-Module -Name Pester)) {
+    $pester = Get-Module -Name Pester -ListAvailable | Where-Object $isPester5 | Sort-Object Version -Descending | Select-Object -First 1
+    if (-not $pester) {
+        $pester = Get-ChildItem -Path (Join-Path $PSScriptRoot 'output/RequiredModules/Pester') -Filter 'Pester.psd1' -Recurse -ErrorAction SilentlyContinue |
+            ForEach-Object { Test-ModuleManifest -Path $_.FullName -ErrorAction SilentlyContinue } |
+            Where-Object $isPester5 | Sort-Object Version -Descending | Select-Object -First 1
     }
-}
-if (-not (Get-Module -Name Pester | Where-Object { $_.Version -ge [version]'5.0.0' })) {
-    Get-Module -Name Pester | Remove-Module -Force
-    Import-Module -Name Pester -MinimumVersion 5.0.0 -ErrorAction Stop
+    if (-not $pester) {
+        throw "Pester 5 is required. Install it with 'Install-Module Pester -MinimumVersion 5.0.0 -MaximumVersion 5.99.99 -Scope CurrentUser'."
+    }
+    Import-Module -Name $pester.Path -Force -ErrorAction Stop
 }
 Write-Host "Pester Version: $((Get-Module -Name Pester).Version)"
 

@@ -3,6 +3,7 @@ Describe "Actions/Connect/AzureDevOps Action Tests" -Tag Unit, PipelineRunner, A
     BeforeAll {
 
         $script:actionPath = (Get-FunctionPath 'AzureDevOps.ps1').FullName
+        . (Get-FunctionPath 'Import-AzureDevOpsDscCommon.ps1').FullName
 
     }
 
@@ -14,10 +15,15 @@ Describe "Actions/Connect/AzureDevOps Action Tests" -Tag Unit, PipelineRunner, A
 
     }
 
-    Context "When the AzureDevOpsDsc.Common module is not available and New-AzDoAuthenticationProvider is not on PATH" {
+    Context "When neither AzureDevOpsDsc.Common nor AzureDevOpsDscNative is available and New-AzDoAuthenticationProvider is not on PATH" {
+
+        BeforeAll {
+            Mock Get-Module { } -ParameterFilter { $ListAvailable }
+            Mock Import-Module { throw "module not found" } -ParameterFilter { $Name -eq 'AzureDevOpsDsc.Common' }
+        }
 
         It "should throw a clear, actionable error" {
-            { & $script:actionPath -Context @{ OrganizationName = 'contoso' } } | Should -Throw "*requires the 'AzureDevOpsDsc.Common' module*"
+            { & $script:actionPath -Context @{ OrganizationName = 'contoso' } } | Should -Throw "*requires the 'AzureDevOpsDscNative' module*"
         }
 
     }
@@ -25,7 +31,7 @@ Describe "Actions/Connect/AzureDevOps Action Tests" -Tag Unit, PipelineRunner, A
     Context "When New-AzDoAuthenticationProvider is already available" {
 
         BeforeEach {
-            function New-AzDoAuthenticationProvider { param($OrganizationName, $PersonalAccessToken, [switch]$useManagedIdentity) }
+            function New-AzDoAuthenticationProvider { param($OrganizationName, $PersonalAccessToken, [switch]$useManagedIdentity, $TenantId, $ClientId, [switch]$useGitHubActionsOIDC) }
             Mock New-AzDoAuthenticationProvider { }
         }
 
@@ -54,6 +60,18 @@ Describe "Actions/Connect/AzureDevOps Action Tests" -Tag Unit, PipelineRunner, A
 
             Assert-MockCalled New-AzDoAuthenticationProvider -Exactly 1 -Scope It -ParameterFilter {
                 $OrganizationName -eq 'contoso' -and $PersonalAccessToken -eq 'sekrit'
+            }
+        }
+
+        It "should throw when AuthenticationType is WorkloadIdentity but TenantId or ClientId is missing" {
+            { & $script:actionPath -Context @{ OrganizationName = 'contoso'; AuthenticationType = 'WorkloadIdentity'; TenantId = 'tenant' } } | Should -Throw "*requires 'TenantId' and 'ClientId'*"
+        }
+
+        It "should authenticate through GitHub Actions OIDC when AuthenticationType is WorkloadIdentity" {
+            & $script:actionPath -Context @{ OrganizationName = 'contoso'; AuthenticationType = 'WorkloadIdentity'; TenantId = 'tenant'; ClientId = 'client' } | Out-Null
+
+            Assert-MockCalled New-AzDoAuthenticationProvider -Exactly 1 -Scope It -ParameterFilter {
+                $OrganizationName -eq 'contoso' -and $TenantId -eq 'tenant' -and $ClientId -eq 'client' -and $useGitHubActionsOIDC -eq $true
             }
         }
 

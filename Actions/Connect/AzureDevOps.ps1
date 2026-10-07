@@ -14,8 +14,10 @@ every consumer. If the module is not installed a clear, actionable error is thro
 .PARAMETER Context
 A hashtable. Recognized keys:
   OrganizationName   - the Azure DevOps organization (required).
-  AuthenticationType - 'ManagedIdentity' (default) or 'PAT'.
+  AuthenticationType - 'ManagedIdentity' (default), 'PAT' or 'WorkloadIdentity'.
   PATToken           - the Personal Access Token, required when AuthenticationType = 'PAT'.
+  TenantId, ClientId - the identity to sign in as through GitHub Actions OIDC, required when
+                       AuthenticationType = 'WorkloadIdentity'.
 
 .OUTPUTS
 $null (the provider registers an ambient session as a side effect).
@@ -34,13 +36,14 @@ if ([string]::IsNullOrWhiteSpace($authenticationType)) {
     $authenticationType = 'ManagedIdentity'
 }
 
-# Soft dependency: import AzureDevOpsDsc.Common on demand, fail clearly if absent.
+# Soft dependency: import AzureDevOpsDsc.Common on demand (standalone, or the copy bundled in
+# AzureDevOpsDscNative), fail clearly if absent.
 if (-not (Get-Command -Name New-AzDoAuthenticationProvider -ErrorAction SilentlyContinue)) {
-    if (Get-Module -ListAvailable -Name AzureDevOpsDsc.Common) {
-        Import-Module -Name AzureDevOpsDsc.Common -ErrorAction Stop
+    try {
+        Import-AzureDevOpsDscCommon
     }
-    else {
-        throw "[Actions/Connect/AzureDevOps] Azure DevOps support requires the 'AzureDevOpsDsc.Common' module. Install the Azure DevOps actions pack, or use a different Connect action."
+    catch {
+        throw "[Actions/Connect/AzureDevOps] $($_.Exception.Message)"
     }
 }
 
@@ -52,12 +55,19 @@ switch ($authenticationType) {
         Write-Verbose "[Actions/Connect/AzureDevOps] Authenticating to '$organizationName' with a Personal Access Token."
         New-AzDoAuthenticationProvider -OrganizationName $organizationName -PersonalAccessToken $Context.PATToken
     }
+    'WorkloadIdentity' {
+        if ([string]::IsNullOrWhiteSpace($Context.TenantId) -or [string]::IsNullOrWhiteSpace($Context.ClientId)) {
+            throw "[Actions/Connect/AzureDevOps] AuthenticationType 'WorkloadIdentity' requires 'TenantId' and 'ClientId' in the action context."
+        }
+        Write-Verbose "[Actions/Connect/AzureDevOps] Authenticating to '$organizationName' with GitHub Actions OIDC as client '$($Context.ClientId)'."
+        New-AzDoAuthenticationProvider -OrganizationName $organizationName -TenantId $Context.TenantId -ClientId $Context.ClientId -useGitHubActionsOIDC
+    }
     'ManagedIdentity' {
         Write-Verbose "[Actions/Connect/AzureDevOps] Authenticating to '$organizationName' with a Managed Identity."
         New-AzDoAuthenticationProvider -OrganizationName $organizationName -useManagedIdentity
     }
     default {
-        throw "[Actions/Connect/AzureDevOps] Unsupported AuthenticationType '$authenticationType'. Use 'ManagedIdentity' or 'PAT'."
+        throw "[Actions/Connect/AzureDevOps] Unsupported AuthenticationType '$authenticationType'. Use 'ManagedIdentity', 'PAT' or 'WorkloadIdentity'."
     }
 }
 

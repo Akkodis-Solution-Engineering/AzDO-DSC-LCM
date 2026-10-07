@@ -109,6 +109,11 @@ function Start-DscRunner {
 
     $infoTag = 'DSC.PipelineRunner.Akkodis'
 
+    # Per-resource failures are reported with Write-Error but must never become terminating
+    # (a caller's 'Stop' would abort the loop), so they are forced to 'Continue' - unless the
+    # caller asked for them to be silenced, which is honoured.
+    $resourceErrorAction = if ($ErrorActionPreference -in 'SilentlyContinue', 'Ignore') { $ErrorActionPreference } else { 'Continue' }
+
     # ConfigurationMode -> engine Mode, exactly as this repo's original Start-DscRunner always mapped it.
     $Mode = $( switch ($ConfigurationMode) {
         "ApplyOnly" { "Set" }
@@ -314,7 +319,7 @@ function Start-DscRunner {
                     $conditionResult = & $sbCondition
                 }
                 catch {
-                    Write-Error "[Start-DscRunner] Could not evaluate the preCondition of resource [$resourceKey]: $($_.Exception.Message)" -ErrorAction Continue
+                    Write-Error "[Start-DscRunner] Could not evaluate the preCondition of resource [$resourceKey]: $($_.Exception.Message)" -ErrorAction $resourceErrorAction
                     & $recordResult $task.type $task.name 'FAIL' $resourceStopwatch.ElapsedMilliseconds $_.Exception.Message
                     Write-Information ("[{0}/{1}] FAIL {2} ({3}ms) - {4}" -f $TaskCounter, $totalTasks, $resourceKey, $resourceStopwatch.ElapsedMilliseconds, $_.Exception.Message) -Tags $infoTag
                     if (-not $ContinueOnError) { $script:StopTaskProcessing = $true }
@@ -350,7 +355,7 @@ function Start-DscRunner {
                 }
             }
             catch {
-                Write-Error "[Start-DscRunner] Could not resolve the properties of resource [$resourceKey]: $($_.Exception.Message)" -ErrorAction Continue
+                Write-Error "[Start-DscRunner] Could not resolve the properties of resource [$resourceKey]: $($_.Exception.Message)" -ErrorAction $resourceErrorAction
                 & $recordResult $task.type $task.name 'FAIL' $resourceStopwatch.ElapsedMilliseconds $_.Exception.Message
                 Write-Information ("[{0}/{1}] FAIL {2} ({3}ms) - {4}" -f $TaskCounter, $totalTasks, $resourceKey, $resourceStopwatch.ElapsedMilliseconds, $_.Exception.Message) -Tags $infoTag
                 if ($ContinueOnError) { $null = $failedResources.Add($resourceKey) } else { $script:StopTaskProcessing = $true }
@@ -388,7 +393,7 @@ function Start-DscRunner {
                     $session = $sessionCache[$sessionCacheKey]
                 }
                 catch {
-                    Write-Error "[Start-DscRunner] Could not establish the '$targetAction' target for resource [$resourceKey]: $($_.Exception.Message)" -ErrorAction Continue
+                    Write-Error "[Start-DscRunner] Could not establish the '$targetAction' target for resource [$resourceKey]: $($_.Exception.Message)" -ErrorAction $resourceErrorAction
                     & $recordResult $task.type $task.name 'FAIL' $resourceStopwatch.ElapsedMilliseconds $_.Exception.Message
                     Write-Information ("[{0}/{1}] FAIL {2} ({3}ms) - {4}" -f $TaskCounter, $totalTasks, $resourceKey, $resourceStopwatch.ElapsedMilliseconds, $_.Exception.Message) -Tags $infoTag
                     if ($ContinueOnError) { $null = $failedResources.Add($resourceKey) } else { $script:StopTaskProcessing = $true }
@@ -415,7 +420,7 @@ function Start-DscRunner {
                 $result = Invoke-EngineAction -Method 'Test' -ModuleName $module -Name $resourceType -Property $Property @engineArgs
             }
             catch {
-                Write-Error "[Start-DscRunner] 'Test' method failed for resource [$resourceKey]: $($_.Exception.Message)" -ErrorAction Continue
+                Write-Error "[Start-DscRunner] 'Test' method failed for resource [$resourceKey]: $($_.Exception.Message)" -ErrorAction $resourceErrorAction
                 & $recordResult $task.type $task.name 'FAIL' $resourceStopwatch.ElapsedMilliseconds $_.Exception.Message
                 Write-Information ("[{0}/{1}] FAIL {2} ({3}ms) - {4}" -f $TaskCounter, $totalTasks, $resourceKey, $resourceStopwatch.ElapsedMilliseconds, $_.Exception.Message) -Tags $infoTag
                 if ($ContinueOnError) { $null = $failedResources.Add($resourceKey) } else { $script:StopTaskProcessing = $true }
@@ -462,13 +467,13 @@ function Start-DscRunner {
                         else {
                             $resourceStatus = 'FAIL'
                             $resourceError = "Resource [$resourceKey] requires a reboot to complete, and the local host cannot safely restart itself mid-run. Set RunnerSettings.Reboot: Ignore to continue without restarting, or target this resource at a remote computer."
-                            Write-Error "[Start-DscRunner] $resourceError" -ErrorAction Continue
+                            Write-Error "[Start-DscRunner] $resourceError" -ErrorAction $resourceErrorAction
                             $CurrentTaskState = 'Stop'
                         }
                     }
                 }
                 catch {
-                    Write-Error "[Start-DscRunner] Failed to apply changes with 'Set' method: [$resourceKey]: $($_.Exception.Message)" -ErrorAction Continue
+                    Write-Error "[Start-DscRunner] Failed to apply changes with 'Set' method: [$resourceKey]: $($_.Exception.Message)" -ErrorAction $resourceErrorAction
                     $resourceStatus = 'FAIL'
                     $resourceError = $_.Exception.Message
                     $CurrentTaskState = 'Stop'
@@ -493,7 +498,7 @@ function Start-DscRunner {
                     }
                 }
                 catch {
-                    Write-Error "[Start-DscRunner] Failed to re-verify resource under 'Enforce' mode: [$resourceKey]: $($_.Exception.Message)" -ErrorAction Continue
+                    Write-Error "[Start-DscRunner] Failed to re-verify resource under 'Enforce' mode: [$resourceKey]: $($_.Exception.Message)" -ErrorAction $resourceErrorAction
                     $resourceStatus = 'FAIL'
                     $resourceError = $_.Exception.Message
                     $CurrentTaskState = 'Stop'
@@ -519,7 +524,7 @@ function Start-DscRunner {
                     $postConditionResult = & $sbPostCondition
                 }
                 catch {
-                    Write-Error "[Start-DscRunner] Could not evaluate the postCondition of resource [$resourceKey]: $($_.Exception.Message)" -ErrorAction Continue
+                    Write-Error "[Start-DscRunner] Could not evaluate the postCondition of resource [$resourceKey]: $($_.Exception.Message)" -ErrorAction $resourceErrorAction
                     $resourceStatus = 'FAIL'
                     $resourceError = $_.Exception.Message
                     $postConditionResult = $null
@@ -549,7 +554,7 @@ function Start-DscRunner {
                 $output_var = $getResult.Raw
             }
             catch {
-                Write-Error "[Start-DscRunner] 'Get' method failed for resource [$resourceKey]: $($_.Exception.Message)" -ErrorAction Continue
+                Write-Error "[Start-DscRunner] 'Get' method failed for resource [$resourceKey]: $($_.Exception.Message)" -ErrorAction $resourceErrorAction
                 $output_var = $null
             }
 
@@ -575,7 +580,7 @@ function Start-DscRunner {
     catch {
         $runStatus = 'AbortedByException'
         $runError = $_.Exception.Message
-        Write-Error "[Start-DscRunner] Run aborted by an unexpected error: $($_.Exception.Message)" -ErrorAction Continue
+        Write-Error "[Start-DscRunner] Run aborted by an unexpected error: $($_.Exception.Message)" -ErrorAction $resourceErrorAction
     }
     finally {
 

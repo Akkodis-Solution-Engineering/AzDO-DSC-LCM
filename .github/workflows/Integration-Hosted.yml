@@ -1,0 +1,88 @@
+# Runs the full Integration suite on GitHub-hosted runners, with every live dependency provisioned
+# so no suite is allowed to skip. Called by Main/Development.IntergrationTests.yml and gated on by
+# Release.yml.
+#
+#   * windows - builds the module, runs the DSC v2 / DSC v3 smoke tests and the DSC v3 document
+#     check, then every Integration suite: WinRM loopback, the real Invoke-DscResource lifecycle,
+#     the built module's pipeline end to end (PipelineEndToEnd.Integration.tests.ps1), SSH
+#     loopback, a live SecretStore vault and the runner-level suites.
+#   * linux - builds the module and runs the suites that do not need a Windows host
+#     ('HostedIntegration': SSH loopback, live vault, notify/using(), conditions, function
+#     language), proving they hold on Linux too.
+#
+# scripts/Initialize-HostedIntegrationRunner.ps1 provisions the runner (SecretManagement +
+# SecretStore, WinRM, dsc, a loopback sshd with a PowerShell subsystem). It refuses to run off a
+# GitHub-hosted runner, because it resets SecretStore and changes machine-wide sshd/PATH settings.
+# PIPELINERUNNER_REQUIRE_INTEGRATION_DEPENDENCIES then makes tests.ps1 fail on any skipped test.
+name: Integration Tests (GitHub-hosted)
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  windows:
+    name: Integration on windows-latest
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PowerShell dependencies
+        shell: pwsh
+        run: Install-Module Datum, Datum.InvokeCommand, powershell-yaml, PSDesiredStateConfiguration -Force
+
+      - name: Provision integration dependencies
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./scripts/Initialize-HostedIntegrationRunner.ps1
+
+      - name: Build the module
+        shell: pwsh
+        run: ./Build.ps1 -ResolveDependency -Tasks build
+
+      - name: DSC v2 engine smoke test
+        shell: pwsh
+        run: ./scripts/Test-DscV2Smoke.ps1 -Verbose
+
+      - name: DSC v3 engine smoke test
+        shell: pwsh
+        run: ./scripts/Test-DscV3Smoke.ps1 -Verbose
+
+      - name: Verify compiled configuration is DSC v3-compliant
+        shell: pwsh
+        run: ./scripts/Test-DscV3ConfigDocument.ps1 -Verbose
+
+      - name: Run integration tests
+        shell: pwsh
+        env:
+          PIPELINERUNNER_REQUIRE_INTEGRATION_DEPENDENCIES: 'true'
+        run: ./tests.ps1 -type Integration
+
+  linux:
+    name: Integration on ubuntu-latest
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PowerShell dependencies
+        shell: pwsh
+        run: Install-Module Datum, Datum.InvokeCommand, powershell-yaml -Force
+
+      - name: Provision integration dependencies
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./scripts/Initialize-HostedIntegrationRunner.ps1
+
+      - name: Build the module
+        shell: pwsh
+        run: ./Build.ps1 -ResolveDependency -Tasks build
+
+      - name: Run integration tests
+        shell: pwsh
+        env:
+          PIPELINERUNNER_REQUIRE_INTEGRATION_DEPENDENCIES: 'true'
+        run: ./tests.ps1 -type Integration -Tag HostedIntegration

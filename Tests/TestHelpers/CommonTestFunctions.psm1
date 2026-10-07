@@ -373,6 +373,59 @@ function Get-DscV2EngineSkipReason {
 
 <#
 .SYNOPSIS
+Returns why the end-to-end pipeline suite cannot run here, or $null when it can.
+
+.DESCRIPTION
+See Get-WinRMSkipReason for why this is a module command rather than a variable in the test file.
+
+The suite drives the BUILT module (output/DSC.PipelineRunner.Akkodis/<version>) through
+Invoke-DscRunner against a real Invoke-DscResource, so it needs everything the DSC v2 engine
+needs, the Datum modules the compile step imports, and a build to have run first.
+#>
+function Get-PipelineEndToEndSkipReason {
+    [CmdletBinding()]
+    param()
+
+    $dscV2Reason = Get-DscV2EngineSkipReason
+    if ($dscV2Reason) { return $dscV2Reason }
+
+    foreach ($module in 'datum', 'datum.invokecommand', 'powershell-yaml') {
+        if (-not (Get-Module -ListAvailable -Name $module)) {
+            return "$module (needed by the Datum compile step) is not installed."
+        }
+    }
+
+    if (-not (Get-BuiltModuleManifest)) {
+        return 'The module has not been built (no output/DSC.PipelineRunner.Akkodis/<version>/DSC.PipelineRunner.Akkodis.psd1); run ./build.ps1 -Tasks build first.'
+    }
+
+    return $null
+}
+
+<#
+.SYNOPSIS
+Returns the newest built module manifest under output/, or $null when the module is not built.
+#>
+function Get-BuiltModuleManifest {
+    [CmdletBinding()]
+    param()
+
+    if ($null -eq $Global:RepositoryRoot) {
+        $Global:RepositoryRoot = Split-RecurivePath $PSScriptRoot -Times 2
+    }
+
+    $builtRoot = Join-Path $Global:RepositoryRoot 'output/DSC.PipelineRunner.Akkodis'
+    if (-not (Test-Path -LiteralPath $builtRoot)) { return $null }
+
+    return Get-ChildItem -LiteralPath $builtRoot -Directory |
+        Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'DSC.PipelineRunner.Akkodis.psd1') } |
+        Sort-Object { [version]$_.Name } -Descending |
+        Select-Object -First 1 |
+        ForEach-Object { Get-Item -LiteralPath (Join-Path $_.FullName 'DSC.PipelineRunner.Akkodis.psd1') }
+}
+
+<#
+.SYNOPSIS
 Returns why the live SecretManagement vault integration suite cannot run here, or $null when it
 can.
 
@@ -515,4 +568,4 @@ function Restore-ProcessEnvironment {
     }
 }
 
-Export-ModuleMember -Function Split-RecurivePath, Get-FunctionPath, Find-Functions, Get-ClassFilePath, Import-Enums, New-MockDirectoryPath, New-MockFilePath, Install-Dependencies, Copy-TestCasesToTempDrive, Get-ModulePath, Get-WinRMSkipReason, Get-DscV2EngineSkipReason, Get-LiveVaultSkipReason, Get-SshRemotingSkipReason, Save-ProcessEnvironment, Restore-ProcessEnvironment, Get-DscResourceFromClassDefinition
+Export-ModuleMember -Function Split-RecurivePath, Get-FunctionPath, Find-Functions, Get-ClassFilePath, Import-Enums, New-MockDirectoryPath, New-MockFilePath, Install-Dependencies, Copy-TestCasesToTempDrive, Get-ModulePath, Get-WinRMSkipReason, Get-DscV2EngineSkipReason, Get-PipelineEndToEndSkipReason, Get-BuiltModuleManifest, Get-LiveVaultSkipReason, Get-SshRemotingSkipReason, Save-ProcessEnvironment, Restore-ProcessEnvironment, Get-DscResourceFromClassDefinition

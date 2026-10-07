@@ -4,7 +4,10 @@
 # validation, Start-DscRunner, the real DscV2 engine and a real Invoke-DscResource - against two
 # real resources from Microsoft's PSDscResources module, with no mocks anywhere:
 #
-#   * Registry    - a string value under a per-run HKCU key
+#   * Registry    - a string value under a per-run HKCU key. The key is written in drive form
+#                   (HKCU:\...): PSDscResources' Ensure = Absent removal passes Key straight to
+#                   Remove-ItemProperty, which resolves HKEY_CURRENT_USER\... against the working
+#                   directory instead of the registry.
 #   * Environment - a per-run MACHINE environment variable, dependsOn the Registry resource
 #
 # Each resource goes through Test (Audit), Set (Enforce), Test again (Audit, now clean) and Get
@@ -29,8 +32,8 @@ Describe "The built module's pipeline, end to end against real PSDscResources re
         $script:EndToEndAvailable  = [string]::IsNullOrEmpty((Get-PipelineEndToEndSkipReason))
 
         $runId = [guid]::NewGuid().ToString('N').Substring(0, 12)
-        $script:RegistryKey      = "HKEY_CURRENT_USER\Software\DscLcmIntegration\$runId"
-        $script:RegistryPSPath   = "Registry::$($script:RegistryKey)"
+        $script:RegistryKey      = "HKCU:\Software\DscLcmIntegration\$runId"
+        $script:RegistryPSPath   = "Registry::HKEY_CURRENT_USER\Software\DscLcmIntegration\$runId"
         $script:RegistryValue    = 'Configured'
         $script:RegistryData     = "lcm-$runId"
         $script:EnvironmentName  = "DSCLCM_INTEGRATION_$runId"

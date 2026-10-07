@@ -90,6 +90,57 @@ Describe "DscV2 Function Tests" -Tag Unit, PipelineRunner, Engine {
         $result.RebootRequired | Should -BeTrue
     }
 
+    Context "Get passes only the properties Get-TargetResource declares" {
+
+        BeforeAll {
+            # A script-based resource whose Get-TargetResource takes Key and ValueName only, like
+            # PSDscResources' Registry; a class-based one has no Get-TargetResource at all.
+            Set-Content -LiteralPath (Join-Path $TestDrive 'MSFT_Sample.psm1') -Value @'
+function Get-TargetResource { param([string]$Key, [string]$ValueName) }
+function Set-TargetResource { param([string]$Key, [string]$ValueName, [string]$Ensure, [bool]$Force) }
+'@
+            Set-Content -LiteralPath (Join-Path $TestDrive 'ClassSample.psm1') -Value 'class Sample { [string]$Key }'
+
+            function Get-DscResource { param($Module, $Name) }
+        }
+
+        BeforeEach {
+            $Global:DscV2CapturedCalls.Clear()
+        }
+
+        It "Drops properties Get-TargetResource does not declare" {
+            Mock -CommandName Get-DscResource -MockWith { [pscustomobject]@{ Path = Join-Path $TestDrive 'MSFT_Sample.psm1' } }
+
+            $null = & $script:DscV2Path -Context @{ Method = 'Get'; ModuleName = 'Mod'; Name = 'Res'; Property = @{ Key = 'k'; ValueName = 'v'; Ensure = 'Present'; Force = $true } }
+
+            $Global:DscV2CapturedCalls[0].Property.Keys | Sort-Object | Should -Be @('Key', 'ValueName')
+        }
+
+        It "Passes every property to Test and Set" {
+            Mock -CommandName Get-DscResource -MockWith { [pscustomobject]@{ Path = Join-Path $TestDrive 'MSFT_Sample.psm1' } }
+
+            $null = & $script:DscV2Path -Context @{ Method = 'Set'; ModuleName = 'Mod'; Name = 'Res'; Property = @{ Key = 'k'; ValueName = 'v'; Ensure = 'Present'; Force = $true } }
+
+            $Global:DscV2CapturedCalls[0].Property.Keys.Count | Should -Be 4
+        }
+
+        It "Leaves a class-based resource's properties alone" {
+            Mock -CommandName Get-DscResource -MockWith { [pscustomobject]@{ Path = Join-Path $TestDrive 'ClassSample.psm1' } }
+
+            $null = & $script:DscV2Path -Context @{ Method = 'Get'; ModuleName = 'Mod'; Name = 'Res'; Property = @{ Key = 'k'; Ensure = 'Present' } }
+
+            $Global:DscV2CapturedCalls[0].Property.Keys.Count | Should -Be 2
+        }
+
+        It "Leaves the properties alone when the resource cannot be resolved" {
+            Mock -CommandName Get-DscResource -MockWith { throw 'not found' }
+
+            $null = & $script:DscV2Path -Context @{ Method = 'Get'; ModuleName = 'Mod'; Name = 'Res'; Property = @{ Key = 'k'; Ensure = 'Present' } }
+
+            $Global:DscV2CapturedCalls[0].Property.Keys.Count | Should -Be 2
+        }
+    }
+
     Context "Remote-target execution (#57 §4)" {
 
         BeforeAll {
@@ -119,8 +170,9 @@ Describe "DscV2 Function Tests" -Tag Unit, PipelineRunner, Engine {
 
             Mock -CommandName Invoke-Command -MockWith {
                 param($Session, $ArgumentList)
+                # ArgumentList is the parameter hashtable, then the Get-narrowing scriptblock's text.
                 $Global:DscV2CapturedCalls.Add([pscustomobject]@{
-                    Session = $Session; Parameters = $ArgumentList
+                    Session = $Session; Parameters = $ArgumentList[0]
                 })
                 return [pscustomobject]@{ InDesiredState = $false; Message = 'remote-drift' }
             }

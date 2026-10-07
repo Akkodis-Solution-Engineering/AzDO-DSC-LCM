@@ -605,7 +605,10 @@ function Restore-ProcessEnvironment {
     $current = [System.Environment]::GetEnvironmentVariables([System.EnvironmentVariableTarget]::Process)
     foreach ($name in @($current.Keys)) {
         if (-not $Snapshot.ContainsKey([string]$name)) {
-            [System.Environment]::SetEnvironmentVariable([string]$name, $null, [System.EnvironmentVariableTarget]::Process)
+            # Not [Environment]::SetEnvironmentVariable($name, $null): PowerShell's env: drive
+            # keeps listing a variable cleared that way, so Test-Path env:<name> stays true and
+            # the next suite's Set-Variables refuses to overwrite it as a pre-existing variable.
+            Remove-Item -LiteralPath "env:$name" -ErrorAction SilentlyContinue
         }
     }
     foreach ($name in $Snapshot.Keys) {

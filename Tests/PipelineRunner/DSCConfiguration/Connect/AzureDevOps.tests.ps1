@@ -18,6 +18,10 @@ Describe "Actions/Connect/AzureDevOps Action Tests" -Tag Unit, PipelineRunner, A
     Context "When neither AzureDevOpsDsc.Common nor AzureDevOpsDscNative is available and New-AzDoAuthenticationProvider is not on PATH" {
 
         BeforeAll {
+            # Stub so the mock binds on a host without PowerShellGet; the install must never run.
+            function Install-Module { param($Name, $Scope, $Repository, [switch]$Force) }
+            Mock Install-Module { throw "no network" }
+            Mock Write-Warning { }
             Mock Get-Module { } -ParameterFilter { $ListAvailable }
             Mock Import-Module { throw "module not found" } -ParameterFilter { $Name -eq 'AzureDevOpsDsc.Common' }
         }

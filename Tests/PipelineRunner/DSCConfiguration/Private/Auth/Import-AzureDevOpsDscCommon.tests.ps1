@@ -57,11 +57,38 @@ Describe 'Import-AzureDevOpsDscCommon Function Tests' -Tag Unit, PipelineRunner,
 
     Context 'When neither module is installed' {
 
-        It 'Should throw an actionable error' {
-            Mock Get-Module { } -ParameterFilter { $ListAvailable }
-            Mock Import-Module { throw 'module not found' } -ParameterFilter { $Name -eq 'AzureDevOpsDsc.Common' }
+        BeforeAll {
+            # Stub so the mock binds on a host without PowerShellGet.
+            function Install-Module { param($Name, $Scope, $Repository, [switch]$Force) }
+        }
 
-            { Import-AzureDevOpsDscCommon } | Should -Throw "*Install-Module AzureDevOpsDscNative*"
+        BeforeEach {
+            Mock Get-Module { } -ParameterFilter { $ListAvailable -and $Name -eq 'AzureDevOpsDsc.Common' }
+            Mock Write-Warning { }
+        }
+
+        It 'Should install AzureDevOpsDscNative for the current user and use its bundled copy' {
+            $script:installed = $false
+            Mock Install-Module { $script:installed = $true }
+            Mock Get-Module {
+                if ($script:installed) {
+                    [pscustomobject]@{ Name = 'AzureDevOpsDscNative'; Version = [version]'1.2.0'; ModuleBase = Join-Path $TestDrive 'Native/1.2.0' }
+                }
+            } -ParameterFilter { $ListAvailable -and $Name -eq 'AzureDevOpsDscNative' }
+
+            Import-AzureDevOpsDscCommon
+
+            Should -Invoke Install-Module -Exactly 1 -Scope It -ParameterFilter { $Name -eq 'AzureDevOpsDscNative' -and $Scope -eq 'CurrentUser' }
+            ($env:PSModulePath -split [regex]::Escape($script:separator))[0] | Should -Be (Join-Path $TestDrive 'Native/1.2.0/Modules')
+            Should -Invoke Import-Module -Exactly 1 -Scope It
+        }
+
+        It 'Should throw an actionable error when the install fails' {
+            Mock Get-Module { } -ParameterFilter { $ListAvailable -and $Name -eq 'AzureDevOpsDscNative' }
+            Mock Install-Module { throw 'no network' }
+
+            { Import-AzureDevOpsDscCommon } | Should -Throw "*Install-Module AzureDevOpsDscNative -Scope CurrentUser*"
+            Should -Invoke Import-Module -Exactly 0 -Scope It
         }
     }
 }

@@ -417,9 +417,10 @@ See Get-WinRMSkipReason for why this is a module command rather than a variable 
 
 The suite drives the BUILT module's Invoke-DscPipelineRunner against a real Azure DevOps
 organization, signing in as the machine's managed identity (AuthenticationType
-'ManagedIdentity'). Beyond what the end-to-end pipeline suite needs, that takes
-AzureDevOpsDscNative, the organization to use (AZUREDEVOPSORG) and an Azure Arc-enabled machine,
-whose agent publishes the managed identity endpoint in IDENTITY_ENDPOINT.
+'ManagedIdentity'). Beyond what the end-to-end pipeline suite needs, that takes the organization
+to use (AZUREDEVOPSORG) and an Azure Arc-enabled machine, whose agent publishes the managed
+identity endpoint in IDENTITY_ENDPOINT. AzureDevOpsDscNative is installed for the current user
+when it is missing.
 #>
 function Get-AzureDevOpsLiveSkipReason {
     [CmdletBinding()]
@@ -428,7 +429,7 @@ function Get-AzureDevOpsLiveSkipReason {
     $dscV2Reason = Get-DscV2EngineSkipReason
     if ($dscV2Reason) { return $dscV2Reason }
 
-    foreach ($module in 'datum', 'datum.invokecommand', 'powershell-yaml', 'AzureDevOpsDscNative') {
+    foreach ($module in 'datum', 'datum.invokecommand', 'powershell-yaml') {
         if (-not (Get-Module -ListAvailable -Name $module)) {
             return "$module is not installed."
         }
@@ -440,6 +441,17 @@ function Get-AzureDevOpsLiveSkipReason {
 
     if ([string]::IsNullOrWhiteSpace($env:IDENTITY_ENDPOINT)) {
         return 'No managed identity endpoint (IDENTITY_ENDPOINT); this is not an Azure Arc-enabled machine.'
+    }
+
+    # Like the module's own Import-AzureDevOpsDscCommon: install it for the current user rather
+    # than skip. Only reached on a machine that can actually run the suite.
+    if (-not (Get-Module -ListAvailable -Name 'AzureDevOpsDscNative')) {
+        try {
+            Install-Module -Name 'AzureDevOpsDscNative' -Scope CurrentUser -Repository PSGallery -Force -ErrorAction Stop
+        }
+        catch {
+            return "AzureDevOpsDscNative is not installed, and installing it for the current user failed: $($_.Exception.Message)"
+        }
     }
 
     if (-not (Get-BuiltModuleManifest)) {

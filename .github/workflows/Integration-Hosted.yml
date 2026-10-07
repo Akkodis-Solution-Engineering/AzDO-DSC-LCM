@@ -124,7 +124,9 @@ jobs:
       # (SecretStore, WinRM, sshd) alone - Initialize-HostedIntegrationRunner.ps1 is not run here.
       - name: Install PowerShell dependencies
         shell: pwsh
-        run: Install-Module Datum, Datum.InvokeCommand, powershell-yaml, PSDesiredStateConfiguration, AzureDevOpsDscNative -Scope CurrentUser -Force
+        # AzureDevOpsDscNative is not listed: when it is missing, the live suite (and the module
+        # itself, at runtime) installs it for the current user.
+        run: Install-Module Datum, Datum.InvokeCommand, powershell-yaml, PSDesiredStateConfiguration -Scope CurrentUser -Force
 
       - name: Build the module
         shell: pwsh

@@ -2,6 +2,7 @@ name: Development Intergration Test Status
 
 on:
   push:
+    branches: [ "development" ]
   pull_request:
     branches: [ "development" ]
   workflow_dispatch:

@@ -109,6 +109,12 @@ jobs:
     name: Live Azure DevOps on the Azure Arc self-hosted runner
     runs-on: [self-hosted, windows]
     timeout-minutes: 45
+    # One live run against the organization at a time, whichever workflow called this one.
+    # AzureDevOpsDscNative caches every project in the organization at sign-in, so a concurrent
+    # run's throwaway project - deleted mid-run - breaks this one (TF200016, TF400438).
+    concurrency:
+      group: azure-devops-live
+      cancel-in-progress: false
     # Never run a fork's code on the runner that holds the managed identity.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     permissions:

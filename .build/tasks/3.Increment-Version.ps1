@@ -13,10 +13,13 @@ task Increment_Version {
         Write-Host "Using version $newVersion from `$env:ModuleVersion (tag-driven release)"
     }
     else {
-        $latestVersion = & git tag | Where-Object { $_ -match "\d+\.\d+\.\d+" } | Sort-Object -Descending | Select-Object -First 1
-        if ([String]::IsNullOrEmpty($latestVersion)) {
-            $latestVersion = "0.0.1"
-        }
+        # Release tags only (X.Y.Z or vX.Y.Z), compared as versions: a prerelease tag such as
+        # v1.0.0-preview0001 is not a base to increment from, and a text sort ranks 0.0.9 above 0.0.10.
+        $latestVersion = & git tag |
+            Where-Object { $_ -match '^v?\d+\.\d+\.\d+$' } |
+            ForEach-Object { [version]($_ -replace '^v', '') } |
+            Sort-Object -Descending | Select-Object -First 1
+        $latestVersion = if ($latestVersion) { $latestVersion.ToString() } else { "0.0.1" }
 
         # Increment the patch version
         $versionParts = $latestVersion -split "\."
@@ -35,8 +38,15 @@ task Increment_Version {
         Remove-Item -Path $moduleManifestPath
     }
 
+    # A manifest's ModuleVersion must be a plain X.Y.Z; a prerelease suffix (1.0.0-preview0001)
+    # goes in PrivateData.PSData.Prerelease, which is how PowerShellGet versions a prerelease.
+    $baseVersion, $prerelease = $newVersion -split '-', 2
+
     $moduleManifest = Get-Content $templatePath
-    $moduleManifest = $moduleManifest -replace "<REPLACE_VERSION>", $newVersion
+    $moduleManifest = $moduleManifest -replace "<REPLACE_VERSION>", $baseVersion
+    if ($prerelease) {
+        $moduleManifest = $moduleManifest -replace "(?<=^\s*Prerelease\s*=\s*)''", "'$prerelease'"
+    }
     Set-Content -Path $moduleManifestPath -Value $moduleManifest
 
     Write-Host "Version updated in module manifest"

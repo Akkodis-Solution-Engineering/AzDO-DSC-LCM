@@ -6,6 +6,7 @@ Describe "Invoke-DscPipelineRunner Function Tests" -Tag Unit {
         # Load the function to test
         $preParseFilePath = (Get-FunctionPath 'Invoke-DscPipelineRunner.ps1').FullName
         . $preParseFilePath
+        . (Get-FunctionPath 'Invoke-AzDoAuthenticationProvider.ps1').FullName
 
         # Invoke-DscPipelineRunner is a thin wrapper: it authenticates to Azure DevOps then
         # delegates everything else to Invoke-DscRunner, so that's the only downstream call

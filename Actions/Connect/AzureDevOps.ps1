@@ -52,11 +52,11 @@ switch ($authenticationType) {
             throw "[Actions/Connect/AzureDevOps] AuthenticationType 'PAT' requires a 'PATToken' in the action context."
         }
         Write-Verbose "[Actions/Connect/AzureDevOps] Authenticating to '$organizationName' with a Personal Access Token."
-        New-AzDoAuthenticationProvider -OrganizationName $organizationName -PersonalAccessToken $Context.PATToken
+        Invoke-AzDoAuthenticationProvider -Parameters @{ OrganizationName = $organizationName; PersonalAccessToken = $Context.PATToken }
     }
     'ManagedIdentity' {
         Write-Verbose "[Actions/Connect/AzureDevOps] Authenticating to '$organizationName' with a Managed Identity."
-        New-AzDoAuthenticationProvider -OrganizationName $organizationName -useManagedIdentity
+        Invoke-AzDoAuthenticationProvider -Parameters @{ OrganizationName = $organizationName; useManagedIdentity = $true }
     }
     default {
         throw "[Actions/Connect/AzureDevOps] Unsupported AuthenticationType '$authenticationType'. Use 'ManagedIdentity' or 'PAT'."

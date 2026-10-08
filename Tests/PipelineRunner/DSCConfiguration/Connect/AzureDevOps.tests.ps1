@@ -4,6 +4,7 @@ Describe "Actions/Connect/AzureDevOps Action Tests" -Tag Unit, PipelineRunner, A
 
         $script:actionPath = (Get-FunctionPath 'AzureDevOps.ps1').FullName
         . (Get-FunctionPath 'Import-AzureDevOpsDscCommon.ps1').FullName
+        . (Get-FunctionPath 'Invoke-AzDoAuthenticationProvider.ps1').FullName
 
     }
 

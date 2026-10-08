@@ -142,9 +142,9 @@ function Invoke-DscPipelineRunner {
     # Determine the Authentication Type and create the Authentication Provider
 
     if ($AuthenticationType -eq 'PAT') {
-        New-AzDoAuthenticationProvider -OrganizationName $AzureDevopsOrganizationName -PersonalAccessToken $PATToken
+        Invoke-AzDoAuthenticationProvider -Parameters @{ OrganizationName = $AzureDevopsOrganizationName; PersonalAccessToken = $PATToken }
     } elseif ($AuthenticationType -eq 'ManagedIdentity') {
-        New-AzDoAuthenticationProvider -OrganizationName $AzureDevopsOrganizationName -useManagedIdentity
+        Invoke-AzDoAuthenticationProvider -Parameters @{ OrganizationName = $AzureDevopsOrganizationName; useManagedIdentity = $true }
     }
 
     #

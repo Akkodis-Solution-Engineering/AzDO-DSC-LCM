@@ -176,6 +176,16 @@ $repository
                 $raw
             }
 
+            # Whether Get found the resource. AzureDevOpsDscNative's Get functions leave Ensure at
+            # Absent even when the resource exists; existence is the lookup's DSCGetSummaryState,
+            # NotFound (2) when it is missing and Changed (0) / Unchanged (1) when it is there.
+            function Test-AzDoGetFound {
+                param([Parameter(Mandatory)]$GetResult)
+                $status = $GetResult.LookupResult.status
+                if ($null -eq $status) { throw "Get returned no LookupResult.status to tell whether the resource exists." }
+                [int]$status -ne 2
+            }
+
             Set-AzDoConfiguration -Ensure Present
         }
     }
@@ -225,11 +235,11 @@ $repository
     It "Get: reads the project and repository back from the organization" -Skip:(-not $script:AzDoAvailable) {
         $project = Invoke-AzDoGet -Name 'AzDoProject' -Property @{ ProjectName = $script:ProjectName }
         $project.ProjectName | Should -Be $script:ProjectName
-        $project.Ensure      | Should -Be 'Present'
+        Test-AzDoGetFound -GetResult $project | Should -BeTrue
 
         $repository = Invoke-AzDoGet -Name 'AzDoGitRepository' -Property @{ ProjectName = $script:ProjectName; RepositoryName = $script:RepositoryName }
         $repository.RepositoryName | Should -Be $script:RepositoryName
-        $repository.Ensure         | Should -Be 'Present'
+        Test-AzDoGetFound -GetResult $repository | Should -BeTrue
     }
 
     It "Set: deletes the project again with Ensure = Absent" -Skip:(-not $script:AzDoAvailable) {
@@ -242,6 +252,6 @@ $repository
         $script:ProjectCreated = $false
 
         $project = Invoke-AzDoGet -Name 'AzDoProject' -Property @{ ProjectName = $script:ProjectName }
-        $project.Ensure | Should -Be 'Absent'
+        Test-AzDoGetFound -GetResult $project | Should -BeFalse
     }
 }

@@ -133,9 +133,9 @@ function Invoke-DscPipelineRunner {
     # Ensure the Azure DevOps-specific auth dependency is available before doing anything else.
 
     try {
-        Import-Module -Name 'AzureDevOpsDsc.Common' -ErrorAction Stop
+        Import-AzureDevOpsDscCommon
     } catch {
-        throw "[Invoke-DscPipelineRunner] Required module 'AzureDevOpsDsc.Common' is not available. Install it via 'Install-Module AzureDevOpsDsc.Common' before calling Invoke-DscPipelineRunner, or call Invoke-DscRunner directly if Azure DevOps authentication is not required. Underlying error: $($_.Exception.Message)"
+        throw "[Invoke-DscPipelineRunner] $($_.Exception.Message) Call Invoke-DscRunner directly if Azure DevOps authentication is not required."
     }
 
     #

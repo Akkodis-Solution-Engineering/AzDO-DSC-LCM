@@ -3,6 +3,7 @@ Describe "Actions/Connect/AzureDevOps Action Tests" -Tag Unit, PipelineRunner, A
     BeforeAll {
 
         $script:actionPath = (Get-FunctionPath 'AzureDevOps.ps1').FullName
+        . (Get-FunctionPath 'Import-AzureDevOpsDscCommon.ps1').FullName
 
     }
 
@@ -14,10 +15,19 @@ Describe "Actions/Connect/AzureDevOps Action Tests" -Tag Unit, PipelineRunner, A
 
     }
 
-    Context "When the AzureDevOpsDsc.Common module is not available and New-AzDoAuthenticationProvider is not on PATH" {
+    Context "When neither AzureDevOpsDsc.Common nor AzureDevOpsDscNative is available and New-AzDoAuthenticationProvider is not on PATH" {
+
+        BeforeAll {
+            # Stub so the mock binds on a host without PowerShellGet; the install must never run.
+            function Install-Module { param($Name, $Scope, $Repository, [switch]$Force) }
+            Mock Install-Module { throw "no network" }
+            Mock Write-Warning { }
+            Mock Get-Module { } -ParameterFilter { $ListAvailable }
+            Mock Import-Module { throw "module not found" } -ParameterFilter { $Name -eq 'AzureDevOpsDsc.Common' }
+        }
 
         It "should throw a clear, actionable error" {
-            { & $script:actionPath -Context @{ OrganizationName = 'contoso' } } | Should -Throw "*requires the 'AzureDevOpsDsc.Common' module*"
+            { & $script:actionPath -Context @{ OrganizationName = 'contoso' } } | Should -Throw "*requires the 'AzureDevOpsDscNative' module*"
         }
 
     }

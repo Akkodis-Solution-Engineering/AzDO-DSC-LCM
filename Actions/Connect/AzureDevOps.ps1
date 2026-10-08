@@ -14,7 +14,8 @@ every consumer. If the module is not installed a clear, actionable error is thro
 .PARAMETER Context
 A hashtable. Recognized keys:
   OrganizationName   - the Azure DevOps organization (required).
-  AuthenticationType - 'ManagedIdentity' (default) or 'PAT'.
+  AuthenticationType - 'ManagedIdentity' (default) or 'PAT'. ManagedIdentity works on Azure VMs
+                       and on Azure Arc-enabled machines.
   PATToken           - the Personal Access Token, required when AuthenticationType = 'PAT'.
 
 .OUTPUTS
@@ -34,13 +35,14 @@ if ([string]::IsNullOrWhiteSpace($authenticationType)) {
     $authenticationType = 'ManagedIdentity'
 }
 
-# Soft dependency: import AzureDevOpsDsc.Common on demand, fail clearly if absent.
+# Soft dependency: import AzureDevOpsDsc.Common on demand (standalone, or the copy bundled in
+# AzureDevOpsDscNative), fail clearly if absent.
 if (-not (Get-Command -Name New-AzDoAuthenticationProvider -ErrorAction SilentlyContinue)) {
-    if (Get-Module -ListAvailable -Name AzureDevOpsDsc.Common) {
-        Import-Module -Name AzureDevOpsDsc.Common -ErrorAction Stop
+    try {
+        Import-AzureDevOpsDscCommon
     }
-    else {
-        throw "[Actions/Connect/AzureDevOps] Azure DevOps support requires the 'AzureDevOpsDsc.Common' module. Install the Azure DevOps actions pack, or use a different Connect action."
+    catch {
+        throw "[Actions/Connect/AzureDevOps] $($_.Exception.Message)"
     }
 }
 

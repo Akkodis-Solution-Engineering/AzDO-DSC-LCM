@@ -45,6 +45,16 @@ Describe 'DatumConfigurationScriptBlock Function Tests' -Tag Unit {
                 ($Name -eq 'datum.invokecommand')
             }
         }
+
+        It "Should import this module from ModulePath when one is given" {
+            $manifestPath = Join-Path $TestDrive 'DSC.PipelineRunner.Akkodis.psd1'
+
+            DatumConfigurationScriptBlock -OutputPath (New-MockDirectoryPath) -configurationPath (New-MockDirectoryPath) -ModulePath $manifestPath -isTest
+
+            Assert-MockCalled -CommandName Import-Module -Exactly 1 -Scope It -ParameterFilter {
+                ($Name -contains $manifestPath) -and ($Name -notcontains 'DSC.PipelineRunner.Akkodis')
+            }
+        }
     }
 
     Context "Directory Change Verification" {

@@ -373,6 +373,118 @@ function Get-DscV2EngineSkipReason {
 
 <#
 .SYNOPSIS
+Returns why the end-to-end pipeline suite cannot run here, or $null when it can.
+
+.DESCRIPTION
+See Get-WinRMSkipReason for why this is a module command rather than a variable in the test file.
+
+The suite drives the BUILT module (output/DSC.PipelineRunner.Akkodis/<version>) through
+Invoke-DscRunner against a real Invoke-DscResource and real PSDscResources resources, so it
+needs everything the DSC v2 engine needs, PSDscResources, the Datum modules the compile step
+imports, and a build to have run first.
+#>
+function Get-PipelineEndToEndSkipReason {
+    [CmdletBinding()]
+    param()
+
+    $dscV2Reason = Get-DscV2EngineSkipReason
+    if ($dscV2Reason) { return $dscV2Reason }
+
+    foreach ($module in 'datum', 'datum.invokecommand', 'powershell-yaml') {
+        if (-not (Get-Module -ListAvailable -Name $module)) {
+            return "$module (needed by the Datum compile step) is not installed."
+        }
+    }
+
+    if (-not (Get-Module -ListAvailable -Name PSDscResources)) {
+        return 'PSDscResources (the Registry and Environment resources the suite configures) is not installed.'
+    }
+
+    if (-not (Get-BuiltModuleManifest)) {
+        return 'The module has not been built (no output/DSC.PipelineRunner.Akkodis/<version>/DSC.PipelineRunner.Akkodis.psd1); run ./build.ps1 -Tasks build first.'
+    }
+
+    return $null
+}
+
+<#
+.SYNOPSIS
+Returns why the live Azure DevOps (AzureDevOpsDscNative) suite cannot run here, or $null when it
+can.
+
+.DESCRIPTION
+See Get-WinRMSkipReason for why this is a module command rather than a variable in the test file.
+
+The suite drives the BUILT module's Invoke-DscPipelineRunner against a real Azure DevOps
+organization, signing in as the machine's managed identity (AuthenticationType
+'ManagedIdentity'). Beyond what the end-to-end pipeline suite needs, that takes the organization
+to use (AZUREDEVOPSORG) and an Azure Arc-enabled machine, whose agent publishes the managed
+identity endpoint in IDENTITY_ENDPOINT. AzureDevOpsDscNative is installed for the current user
+when it is missing.
+#>
+function Get-AzureDevOpsLiveSkipReason {
+    [CmdletBinding()]
+    param()
+
+    $dscV2Reason = Get-DscV2EngineSkipReason
+    if ($dscV2Reason) { return $dscV2Reason }
+
+    foreach ($module in 'datum', 'datum.invokecommand', 'powershell-yaml') {
+        if (-not (Get-Module -ListAvailable -Name $module)) {
+            return "$module is not installed."
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($env:AZUREDEVOPSORG)) {
+        return 'AZUREDEVOPSORG is not set; it names the Azure DevOps organization to test against.'
+    }
+
+    if ([string]::IsNullOrWhiteSpace($env:IDENTITY_ENDPOINT)) {
+        return 'No managed identity endpoint (IDENTITY_ENDPOINT); this is not an Azure Arc-enabled machine.'
+    }
+
+    # Like the module's own Import-AzureDevOpsDscCommon: install it for the current user rather
+    # than skip. Only reached on a machine that can actually run the suite.
+    if (-not (Get-Module -ListAvailable -Name 'AzureDevOpsDscNative')) {
+        try {
+            Install-Module -Name 'AzureDevOpsDscNative' -Scope CurrentUser -Repository PSGallery -Force -ErrorAction Stop
+        }
+        catch {
+            return "AzureDevOpsDscNative is not installed, and installing it for the current user failed: $($_.Exception.Message)"
+        }
+    }
+
+    if (-not (Get-BuiltModuleManifest)) {
+        return 'The module has not been built (no output/DSC.PipelineRunner.Akkodis/<version>/DSC.PipelineRunner.Akkodis.psd1); run ./build.ps1 -Tasks build first.'
+    }
+
+    return $null
+}
+
+<#
+.SYNOPSIS
+Returns the newest built module manifest under output/, or $null when the module is not built.
+#>
+function Get-BuiltModuleManifest {
+    [CmdletBinding()]
+    param()
+
+    if ($null -eq $Global:RepositoryRoot) {
+        $Global:RepositoryRoot = Split-RecurivePath $PSScriptRoot -Times 2
+    }
+
+    $builtRoot = Join-Path $Global:RepositoryRoot 'output/DSC.PipelineRunner.Akkodis'
+    if (-not (Test-Path -LiteralPath $builtRoot)) { return $null }
+
+    return Get-ChildItem -LiteralPath $builtRoot -Directory |
+        Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'DSC.PipelineRunner.Akkodis.psd1') } |
+        Sort-Object { [version]$_.Name } -Descending |
+        Select-Object -First 1 |
+        ForEach-Object { Get-Item -LiteralPath (Join-Path $_.FullName 'DSC.PipelineRunner.Akkodis.psd1') }
+}
+
+<#
+.SYNOPSIS
 Returns why the live SecretManagement vault integration suite cannot run here, or $null when it
 can.
 
@@ -505,7 +617,10 @@ function Restore-ProcessEnvironment {
     $current = [System.Environment]::GetEnvironmentVariables([System.EnvironmentVariableTarget]::Process)
     foreach ($name in @($current.Keys)) {
         if (-not $Snapshot.ContainsKey([string]$name)) {
-            [System.Environment]::SetEnvironmentVariable([string]$name, $null, [System.EnvironmentVariableTarget]::Process)
+            # Not [Environment]::SetEnvironmentVariable($name, $null): PowerShell's env: drive
+            # keeps listing a variable cleared that way, so Test-Path env:<name> stays true and
+            # the next suite's Set-Variables refuses to overwrite it as a pre-existing variable.
+            Remove-Item -LiteralPath "env:$name" -ErrorAction SilentlyContinue
         }
     }
     foreach ($name in $Snapshot.Keys) {
@@ -515,4 +630,4 @@ function Restore-ProcessEnvironment {
     }
 }
 
-Export-ModuleMember -Function Split-RecurivePath, Get-FunctionPath, Find-Functions, Get-ClassFilePath, Import-Enums, New-MockDirectoryPath, New-MockFilePath, Install-Dependencies, Copy-TestCasesToTempDrive, Get-ModulePath, Get-WinRMSkipReason, Get-DscV2EngineSkipReason, Get-LiveVaultSkipReason, Get-SshRemotingSkipReason, Save-ProcessEnvironment, Restore-ProcessEnvironment, Get-DscResourceFromClassDefinition
+Export-ModuleMember -Function Split-RecurivePath, Get-FunctionPath, Find-Functions, Get-ClassFilePath, Import-Enums, New-MockDirectoryPath, New-MockFilePath, Install-Dependencies, Copy-TestCasesToTempDrive, Get-ModulePath, Get-WinRMSkipReason, Get-DscV2EngineSkipReason, Get-PipelineEndToEndSkipReason, Get-AzureDevOpsLiveSkipReason, Get-BuiltModuleManifest, Get-LiveVaultSkipReason, Get-SshRemotingSkipReason, Save-ProcessEnvironment, Restore-ProcessEnvironment, Get-DscResourceFromClassDefinition

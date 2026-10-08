@@ -102,8 +102,9 @@ Describe "Target/SSH against a live sshd with a PowerShell subsystem" -Tag Integ
         # cmdlet accepts it and that the far side genuinely runs as that account. The current
         # user is the only account whose key is authorised on the agent, so it is the one that
         # can be asserted without provisioning a second one.
-        $userName = & whoami
-        $userName = ([string]$userName).Trim()
+        # The bare account name: whoami gives 'machine\user' on Windows, which ssh does not treat
+        # as the same login.
+        $userName = [Environment]::UserName
 
         $session = & $script:SSHPath -Context @{
             ComputerName = $script:SshTarget
@@ -114,7 +115,7 @@ Describe "Target/SSH against a live sshd with a PowerShell subsystem" -Tag Integ
 
         $session.PSSession.State | Should -Be 'Opened'
 
-        $remoteUser = Invoke-Command -Session $session.PSSession -ScriptBlock { (& whoami) }
+        $remoteUser = Invoke-Command -Session $session.PSSession -ScriptBlock { [Environment]::UserName }
         ([string]$remoteUser).Trim() | Should -Be $userName
     }
 

@@ -10,13 +10,14 @@ Describe "Invoke-DscPipelineRunner Function Tests" -Tag Unit {
         # Invoke-DscPipelineRunner is a thin wrapper: it authenticates to Azure DevOps then
         # delegates everything else to Invoke-DscRunner, so that's the only downstream call
         # that needs to be mocked/asserted here. Neither AzureDevOpsDsc.Common (mocked out via
-        # Import-Module below) nor Invoke-DscRunner's own heavy dependency chain are loaded in
-        # this test, so both commands are declared as stubs here purely so Pester's Mock has
-        # something to intercept.
+        # Import-AzureDevOpsDscCommon below) nor Invoke-DscRunner's own heavy dependency chain
+        # are loaded in this test, so the commands are declared as stubs here purely so Pester's
+        # Mock has something to intercept.
+        function Import-AzureDevOpsDscCommon { }
         function New-AzDoAuthenticationProvider { param($OrganizationName, $PersonalAccessToken, [switch]$useManagedIdentity) }
         function Invoke-DscRunner { param($exportConfigDir, $ConfigurationSourcePath, $ConfigurationRevision, $ConfigurationMode, $ReportPath, [switch]$ContinueOnError, $Engine, $EngineVersion, [switch]$FailOnError, [switch]$KeepTemporaryDirectory) }
 
-        Mock -CommandName Import-Module
+        Mock -CommandName Import-AzureDevOpsDscCommon
         Mock -CommandName New-AzDoAuthenticationProvider
         Mock -CommandName Invoke-DscRunner -MockWith { return [pscustomobject]@{ Status = 'Completed' } }
         Mock -CommandName Test-Path -MockWith { return $true }
@@ -29,10 +30,10 @@ Describe "Invoke-DscPipelineRunner Function Tests" -Tag Unit {
     Context "AzureDevOpsDsc.Common Dependency Check" {
 
         It "should throw a clear error when AzureDevOpsDsc.Common is not available" {
-            Mock -CommandName Import-Module -MockWith { throw "module not found" }
+            Mock -CommandName Import-AzureDevOpsDscCommon -MockWith { throw "Azure DevOps support requires the 'AzureDevOpsDscNative' module." }
 
             { Invoke-DscPipelineRunner -AzureDevopsOrganizationName "MyOrg" -exportConfigDir $exportConfigDir -ConfigurationSourcePath $ConfigurationSourcePath -JITToken "mockToken" } |
-                Should -Throw "*Required module 'AzureDevOpsDsc.Common' is not available*"
+                Should -Throw "*requires the 'AzureDevOpsDscNative' module*"
 
             Should -Invoke Invoke-DscRunner -Exactly 0
         }

@@ -26,6 +26,45 @@ $resourceParameters = @{
     Property   = $Context.Property
 }
 
+# Invoke-DscResource hands a script-based (MOF) resource's Get-TargetResource EVERY property it
+# is given, and PowerShell rejects any that function does not declare - PSDscResources' Registry
+# fails Get with "A parameter cannot be found that matches parameter name 'Force'", Environment
+# with 'Ensure'. The Windows LCM never passes those, so Get is narrowed to the parameters
+# Get-TargetResource declares. Class-based resources have no Get-TargetResource and are passed
+# through unchanged, as is anything that cannot be resolved. A scriptblock, so a remote target
+# can run it against the resource installed on the far side.
+$selectGetParameters = {
+    param([hashtable]$Parameters)
+
+    if ($Parameters.Method -ne 'Get' -or $null -eq $Parameters.Property) { return $Parameters }
+
+    try {
+        $resource = Get-DscResource -Module $Parameters.ModuleName -Name $Parameters.Name -ErrorAction Stop |
+            Select-Object -First 1
+        if ($null -eq $resource -or [string]$resource.Path -notlike '*.psm1') { return $Parameters }
+
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($resource.Path, [ref]$null, [ref]$null)
+        $getFunction = $ast.Find({
+            param($node)
+            $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-TargetResource'
+        }, $false)
+        if ($null -eq $getFunction -or $null -eq $getFunction.Body.ParamBlock) { return $Parameters }
+
+        $declared = @($getFunction.Body.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
+        $property = @{}
+        foreach ($key in $Parameters.Property.Keys) {
+            if ($declared -contains $key) { $property[$key] = $Parameters.Property[$key] }
+        }
+
+        $narrowed = $Parameters.Clone()
+        $narrowed.Property = $property
+        return $narrowed
+    }
+    catch {
+        return $Parameters
+    }
+}
+
 # Remote-target execution (#57 §4): the Target action resolves a session once per
 # file/resource and threads it through Invoke-EngineAction's Session context. Local
 # (the default; $Context.Session is $null) is unaffected and keeps the original call shape.
@@ -63,11 +102,12 @@ if ($null -ne $remotePSSession) {
     # deserialized result is a PSObject, never the original type.
     Write-Verbose "[Actions/Engine/DscV2] Using remote PSSession for [$($Context.ModuleName)/$($Context.Name)]."
 
-    $raw = Invoke-Command -Session $remotePSSession -ArgumentList $resourceParameters -ErrorAction Stop -ScriptBlock {
-        param([hashtable]$Parameters)
+    $raw = Invoke-Command -Session $remotePSSession -ArgumentList $resourceParameters, $selectGetParameters.ToString() -ErrorAction Stop -ScriptBlock {
+        param([hashtable]$Parameters, [string]$SelectGetParameters)
 
         Import-Module -Name PSDesiredStateConfiguration -ErrorAction SilentlyContinue
 
+        $Parameters = & ([scriptblock]::Create($SelectGetParameters)) $Parameters
         Invoke-DscResource @Parameters
     }
 }
@@ -78,12 +118,14 @@ elseif ($null -ne $remoteCimSession) {
         throw "[Actions/Engine/DscV2] A remote target was resolved for [$($Context.ModuleName)/$($Context.Name)] with a CimSession but no PSSession, and this host's Invoke-DscResource has no -CimSession parameter (PSDesiredStateConfiguration 2.x, which PowerShell 7 uses, removed it). Use a target action that also opens a PSSession, or select the DscV3 engine."
     }
 
+    $resourceParameters = & $selectGetParameters $resourceParameters
     $resourceParameters.CimSession = $remoteCimSession
     Write-Verbose "[Actions/Engine/DscV2] Using remote CimSession for [$($Context.ModuleName)/$($Context.Name)]."
 
     $raw = Invoke-DscResource @resourceParameters
 }
 else {
+    $resourceParameters = & $selectGetParameters $resourceParameters
     $raw = Invoke-DscResource @resourceParameters
 }
 

@@ -111,6 +111,15 @@ Function Build-DatumConfiguration {
     $powerShellInstance.Runspace = $runspace
     $null = $powerShellInstance.AddScript($scriptBlock).AddArgument($OutputPath).AddArgument($ConfigurationPath)
 
+    # The runspace imports this module again. Point it at the copy already loaded rather than
+    # resolving the name on PSModulePath, which may find a different version or none at all.
+    $loadedModule = $MyInvocation.MyCommand.Module
+    if ($null -ne $loadedModule) {
+        $loadedManifest = Join-Path $loadedModule.ModuleBase "$($loadedModule.Name).psd1"
+        $modulePath = if (Test-Path -LiteralPath $loadedManifest) { $loadedManifest } else { $loadedModule.Path }
+        $null = $powerShellInstance.AddParameter('ModulePath', $modulePath)
+    }
+
     try {
         # Run the PowerShell script asynchronously and wait for completion
         $asyncResult = $powerShellInstance.BeginInvoke()

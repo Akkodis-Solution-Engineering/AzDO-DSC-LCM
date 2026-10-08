@@ -2,6 +2,7 @@ name: Main Intergration Test Status
 
 on:
   push:
+    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
